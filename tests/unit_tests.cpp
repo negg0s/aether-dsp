@@ -12,6 +12,8 @@
 #include "aether/midi/midi_file.hpp"
 #include "aether/wav_writer.hpp"
 #include "aether/wav_reader.hpp"
+#include "aether/plugin/clap_entry.hpp"
+#include "aether/c_api.h"
 #include <iostream>
 #include <cassert>
 #include <cmath>
@@ -178,13 +180,11 @@ void test_binaural_panner() {
     std::cout << "[TEST] 3D Binaural HRTF Panner... ";
     aether::dsp::fx::BinauralPanner panner(48000);
 
-    // Right side: azimuth = +90 degrees (right ear leads, left ear delayed)
     panner.set_position(90.0f, 1.0f);
     auto stereo = panner.process(1.0f);
     assert(!std::isnan(stereo.left));
     assert(!std::isnan(stereo.right));
 
-    // Left side: azimuth = -90 degrees
     panner.set_position(-90.0f, 1.0f);
     stereo = panner.process(1.0f);
     assert(!std::isnan(stereo.left));
@@ -222,8 +222,39 @@ void test_wav_roundtrip() {
     std::cout << "PASSED\n";
 }
 
+void test_c_api() {
+    std::cout << "[TEST] C-ABI Dynamic API Functions... ";
+    aether_engine_handle_t handle = aether_engine_create(48000);
+    assert(handle != nullptr);
+
+    aether_engine_load_preset(handle, AETHER_PRESET_HYPERBOLIC_BELL);
+    aether_engine_note_on(handle, 0.3f, 0.4f, 0.9f);
+
+    std::vector<float> buffer(128 * 2, 0.0f);
+    aether_engine_process_interleaved(handle, buffer.data(), 128);
+
+    bool has_sound = false;
+    for (float sample : buffer) {
+        if (std::abs(sample) > 1e-5f) has_sound = true;
+    }
+    assert(has_sound);
+
+    aether_engine_note_off(handle);
+    aether_engine_destroy(handle);
+    std::cout << "PASSED\n";
+}
+
+void test_clap_plugin_descriptor() {
+    std::cout << "[TEST] CLAP Plugin Architecture Descriptor... ";
+    const auto desc = aether::plugin::get_descriptor();
+    assert(std::string(desc.id) == "com.negg0s.aether-dsp");
+    assert(std::string(desc.name) == "AetherDSP");
+    assert(aether::plugin::PARAMETER_CATALOG[0].id == aether::plugin::PARAM_PRESET);
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (11 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (13 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -235,6 +266,8 @@ int main() {
     test_binaural_panner();
     test_hyperbolic_tiling();
     test_wav_roundtrip();
-    std::cout << "\033[1;32mALL 11 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_c_api();
+    test_clap_plugin_descriptor();
+    std::cout << "\033[1;32mALL 13 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

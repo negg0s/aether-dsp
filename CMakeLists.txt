@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(aether-dsp
-    VERSION 1.0.0
+    VERSION 1.1.0
     DESCRIPTION "Non-Euclidean Hyperbolic Waveguide & Modal Cymatics Acoustic Synthesis Engine"
     LANGUAGES CXX
 )
@@ -20,15 +20,26 @@ endif()
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# Main Executable & Benchmark Suite
+# 1. Main Executable & Benchmark Suite
 add_executable(aether-dsp
     src/main.cpp
     src/audio_device.cpp
+    src/c_api.cpp
 )
 
-# Test Suite Executable
+# 2. Shared Dynamic Library (C-ABI for Python, FFI, Game Engines)
+add_library(aether-dsp-shared SHARED
+    src/c_api.cpp
+)
+set_target_properties(aether-dsp-shared PROPERTIES
+    OUTPUT_NAME "aether-dsp"
+    DEFINE_SYMBOL "AETHER_BUILD_DLL"
+)
+
+# 3. Test Suite Executable
 add_executable(aether-tests
     tests/unit_tests.cpp
+    src/c_api.cpp
 )
 
 enable_testing()

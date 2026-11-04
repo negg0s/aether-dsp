@@ -4,6 +4,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++20](https://img.shields.io/badge/Language-C%2B%2B20-00599C?logo=cplusplus)](https://en.cppreference.com/w/cpp/20)
 [![SIMD](https://img.shields.io/badge/SIMD-AVX2%20Fused%20Multiply--Add-blueviolet)](#)
+[![Python FFI](https://img.shields.io/badge/Python-ctypes%20C--ABI%20Zero--Copy-blue)](#)
+[![CLAP](https://img.shields.io/badge/Plugin-CLAP%20Native%20Standard-red)](#)
 [![Audio](https://img.shields.io/badge/Audio-WASAPI%20%7C%20CoreAudio%20%7C%20ALSA%20%7C%20WebAudio-success)](#)
 [![MIDI](https://img.shields.io/badge/MIDI-SMF%20Format%200%2F1-yellow)](#)
 [![Zero-AI](https://img.shields.io/badge/Engine-100%25%20Pure%20Math%20%26%20DSP%20(No%20AI)-orange)](#)
@@ -16,7 +18,7 @@
 /_/  |_\___/\__/_/ /_/\___/_/     /_____//____/_/       
 ```
 
-**AetherDSP** is an ultra-high-performance, physical modeling sound synthesis engine built in modern C++20 with AVX2 SIMD acceleration. It combines **2D Non-Euclidean Hyperbolic Waveguide Acoustics** (Poincaré conformal disk manifolds), **2D Kirchhoff-Love Thin Plate Modal Resonators** (Chladni cymatics), **Microtonal Tuning Systems** (Bohlen-Pierce), and **Unitary Hyperbolic FDN Reverb** into a unified, zero-allocation real-time audio architecture.
+**AetherDSP** is an ultra-high-performance physical modeling sound synthesis engine built in modern C++20 with AVX2 SIMD acceleration. It combines **2D Non-Euclidean Hyperbolic Waveguide Acoustics** (Poincaré conformal disk manifolds), **2D Kirchhoff-Love Thin Plate Modal Resonators** (Chladni cymatics), **3D Woodworth Binaural Spatialization**, **Microtonal Tuning Systems** (Bohlen-Pierce), and **Unitary Hyperbolic FDN Reverb** into a unified, zero-allocation real-time audio architecture.
 
 Unlike standard physical modeling synthesizers constrained to 1D strings (Karplus-Strong) or rectangular Euclidean rooms, AetherDSP solves acoustic wave propagation on curved Riemannian geometries ($K = -1$) and thin plate biharmonic surfaces, generating shimmering, inharmonic timbres that cannot exist in standard 3D Euclidean space.
 
@@ -28,6 +30,8 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
   Solves the 2D wave equation on a Riemannian manifold with constant negative Gaussian curvature $K = -1$ using Finite-Difference Time-Domain (FDTD). Wavefronts expand exponentially towards the horocycle boundary without modal flutter.
 - **AVX2 SIMD Vectorized FDTD Kernel:**
   Processes 8 spatial grid cells per instruction using 8-wide vectorized fused multiply-add (`_mm256_fmadd_ps`) operations.
+- **3D Binaural HRTF Spatializer (Woodworth Spherical Head Model):**
+  Calculates true Interaural Time Difference (ITD: $\Delta t = \frac{a}{c}(\theta + \sin\theta)$) and Interaural Level Difference (ILD) with frequency-dependent head shadowing, allowing sounds to orbit 360-degrees around the listener's head.
 - **2D Modal Cymatics Plate (Kirchhoff-Love Thin Elastic Plate):**
   Calculates the analytical biharmonic eigenmode lattice of vibrating thin plates with customizable stiffness and Poisson ratios. Computes exact nodal lines ($u(x,y) = 0$) where sand accumulates in real-time.
 - **Microtonal Tuning Engine (Bohlen-Pierce & Scala .scl Support):**
@@ -36,12 +40,12 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
   4-channel unitary Householder feedback matrix with mutually prime delay lines derived from the $\{7, 3\}$ hyperbolic heptagonal tessellation.
 - **Standard MIDI File (SMF 0/1) Engine:**
   Zero-dependency binary parser and serializer for `.mid` files. Export and sequence scores directly into digital audio workstations (DAWs).
+- **C-ABI Dynamic Library & Python Integration:**
+  Exported C ABI (`aether-dsp.dll` / `libaether-dsp.so`) with zero-copy buffer passing for seamless integration into Python (`ctypes`), Rust, or game engines (Godot/Unreal).
+- **CLAP (CLever Audio Plugin) Architecture:**
+  Standard-compliant native CLAP plugin definitions for DAW hosting (Bitwig, Reaper, FL Studio).
 - **Live Real-Time Audio Hardware Streaming:**
-  Low-latency hardware audio device streaming via `miniaudio` (WASAPI, CoreAudio, ALSA, PulseAudio, WebAudio).
-- **Strict Real-Time Safety Guarantees:**
-  - **Zero Dynamic Allocations (`malloc`/`new`)** inside the block processing loop.
-  - **Lock-Free, Wait-Free SPSC Ring Buffer** with cache-line padding (`hardware_destructive_interference_size`) to prevent false sharing.
-  - Header-only core architecture with `noexcept` specifications.
+  Low-latency hardware audio streaming via `miniaudio` (WASAPI, CoreAudio, ALSA, PulseAudio, WebAudio).
 - **Interactive 3D Web Visualizer:**
   Standalone browser app featuring 3D isometric plate topography, 6,000 sand particle cymatics physics, Poincaré disk ripples, and a real-time FFT spectrum & oscilloscope.
 
@@ -83,18 +87,6 @@ $$w_{m,n}(x,y) = \cos\left(\frac{m\pi x}{L}\right)\cos\left(\frac{n\pi y}{L}\rig
 
 ---
 
-## Live Interactive Web Visualizer
-
-Open [`web/index.html`](web/index.html) directly in any modern browser:
-
-- **Poincaré Waveguide Canvas:** Click anywhere inside the unit disk to strike non-Euclidean space and observe real-time wavefront divergence.
-- **Chladni Plate Sand Simulation:** 6,000 live sand particles move dynamically across the vibrating plate, kicked away by antinodes and gathering strictly onto geometric nodal lines.
-- **3D Isometric Heightfield:** Live 3D perspective wireframe showing the physical deformation of the vibrating plate.
-- **Web Audio Engine & FFT Scope:** Real-time modal and chaotic audio synthesis running natively via Web Audio API with a live oscilloscope and frequency spectrum analyzer.
-- **Virtual Piano & Computer Hotkeys:** Play notes using computer keys (`A`, `W`, `S`, `E`, `D`, `F`, `T`, `G`, `Y`, `H`, `U`, `J`, `K`).
-
----
-
 ## Building from Source
 
 ### Prerequisites
@@ -111,11 +103,34 @@ cd aether-dsp
 # Configure
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
-# Build targets (CLI synthesizer & test suite)
+# Build targets (CLI synthesizer, shared C-ABI library & test suite)
 cmake --build build --config Release
 
-# Run unit tests
+# Run complete 13-test invariant suite
 ctest --test-dir build --output-on-failure
+```
+
+---
+
+## Python Integration (C-ABI Bridge)
+
+Run the zero-dependency Python script to generate audio through the native C++20 engine:
+
+```bash
+python examples/python_demo.py
+```
+
+```python
+import ctypes
+
+lib = ctypes.CDLL("./build/aether-dsp.dll")
+engine = lib.aether_engine_create(48000)
+lib.aether_engine_load_preset(engine, 0) # Hyperbolic Cosmic Bell
+lib.aether_engine_note_on(engine, ctypes.c_float(0.35), ctypes.c_float(0.45), ctypes.c_float(0.9))
+
+buffer = (ctypes.c_float * (48000 * 2))()
+lib.aether_engine_process_interleaved(engine, buffer, 48000)
+lib.aether_engine_destroy(engine)
 ```
 
 ---
@@ -134,6 +149,12 @@ Play with keyboard:
   Quit      : [Q] or [ESC]
 ```
 
+### External Audio Resynthesis
+Drive the Poincaré hyperbolic waveguide with any external audio sample:
+```bash
+./build/aether-dsp --resynthesize input.wav output_resynthesized.wav
+```
+
 ### Benchmark & Batch WAV/MIDI Rendering
 ```bash
 ./build/aether-dsp
@@ -147,6 +168,8 @@ Play with keyboard:
 | `03_chaotic_quantum_drone.wav` | 32-bit Float WAV | Evolving deterministic sub-harmonic drone |
 | `04_hyperbolic_aether_space.wav` | 32-bit Float WAV | Shimmering cosmic acoustic field |
 | `05_fibonacci_non_euclidean_sonata.wav` | 32-bit Float WAV | Algorithmic polyphonic sonata based on Fibonacci & Xenakis sieve |
+| `06_binaural_3d_orbit_demo.wav` | 32-bit Float WAV | 3D Woodworth spherical head model binaural 360-degree orbit |
+| `07_hyperbolic_resynthesized_gong.wav` | 32-bit Float WAV | Acoustic resynthesis driven by external audio excitation |
 | `fibonacci_score.mid` | Standard MIDI Format 1 | Exported polyphonic score ready for DAW import (Ableton/FL Studio) |
 
 ---
@@ -157,33 +180,45 @@ Play with keyboard:
 aether-dsp/
 ├── include/aether/
 │   ├── types.hpp                  # Sample representations, 2D/3D vectors, stereo frames
+│   ├── c_api.h                    # C99/C++ extern "C" ABI export declarations
 │   ├── ring_buffer.hpp            # Lock-free, wait-free SPSC ring buffer (cache-line aligned)
 │   ├── wav_writer.hpp             # Lossless RIFF WAV exporter (32-bit float / 24-bit PCM)
+│   ├── wav_reader.hpp             # Zero-dependency RIFF WAV reader & decoder
 │   ├── engine.hpp                 # Master engine orchestrator, voices & FDN reverb
 │   ├── audio/
 │   │   ├── miniaudio.h            # Single-header cross-platform audio hardware driver
 │   │   └── playback_device.hpp    # Low-latency audio streaming wrapper
 │   ├── midi/
 │   │   └── midi_file.hpp          # Standard MIDI File (SMF 0/1) binary parser & exporter
+│   ├── plugin/
+│   │   └── clap_entry.hpp         # CLAP (CLever Audio Plugin) native standard definitions
 │   ├── math/
 │   │   ├── poincare.hpp           # Riemannian metric, conformal factors, geodesic distance
 │   │   ├── runge_kutta.hpp        # 4th-order Runge-Kutta ODE numerical solver
+│   │   ├── hyperbolic_tiling.hpp  # Non-Euclidean {7, 3} & {5, 4} tessellation generator
 │   │   └── algorithmic_composer.hpp # Xenakis Sieve & Fibonacci score generator
 │   ├── dsp/
 │   │   ├── biquad.hpp             # Direct Form II Transposed biquad filter
 │   │   ├── envelope.hpp           # Sample-accurate exponential ADSR envelope
 │   │   ├── tuning.hpp             # Microtonal tuning engine (Bohlen-Pierce & Scala .scl)
 │   │   └── fx/
-│   │       └── hyperbolic_reverb.hpp # 4-channel unitary Householder FDN reverb
+│   │       ├── hyperbolic_reverb.hpp # 4-channel unitary Householder FDN reverb
+│   │       └── binaural_panner.hpp   # 3D Woodworth spherical head binaural spatializer
 │   └── engines/
 │       ├── hyperbolic_waveguide.hpp # AVX2 SIMD Non-Euclidean FDTD hyperbolic wave solver
 │       ├── chladni_plate.hpp        # Kirchhoff-Love 2D thin plate modal synthesizer
 │       └── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
 ├── src/
 │   ├── main.cpp                   # CLI benchmark, live hardware audio, MIDI exporter
-│   └── audio_device.cpp           # Miniaudio hardware backend compilation unit
+│   ├── audio_device.cpp           # Miniaudio hardware backend compilation unit
+│   └── c_api.cpp                  # C-ABI implementation
 ├── tests/
-│   └── unit_tests.cpp             # 8 extended mathematical invariants & audio stability tests
+│   └── unit_tests.cpp             # 13 extended mathematical invariants & audio stability tests
+├── examples/
+│   └── python_demo.py             # Python ctypes zero-dependency integration demo
+├── scripts/
+│   ├── build_wasm.bat             # Emscripten WebAssembly build script (Windows)
+│   └── build_wasm.sh              # Emscripten WebAssembly build script (Linux/macOS)
 ├── web/
 │   ├── index.html                 # Standalone interactive browser GUI & 3D wireframe
 │   └── app.js                     # 3D Canvas visualizer, sand physics & Web Audio synth
