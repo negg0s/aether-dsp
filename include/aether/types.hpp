@@ -41,6 +41,23 @@ struct Vec2 {
         return std::sqrt(magnitude_squared());
     }
 
+    [[nodiscard]] constexpr float length_squared() const noexcept {
+        return x * x + y * y;
+    }
+
+    [[nodiscard]] inline float length() const noexcept {
+        return std::sqrt(length_squared());
+    }
+
+    [[nodiscard]] constexpr float dot(const Vec2& other) const noexcept {
+        return x * other.x + y * other.y;
+    }
+
+    [[nodiscard]] inline Vec2 normalized() const noexcept {
+        const float len = length();
+        return len > 1e-6f ? Vec2{x / len, y / len} : Vec2{0.0f, 0.0f};
+    }
+
     [[nodiscard]] constexpr Vec2 operator+(const Vec2& other) const noexcept {
         return {x + other.x, y + other.y};
     }

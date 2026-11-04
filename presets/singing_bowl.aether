@@ -1,0 +1,12 @@
+# AetherDSP Preset Configuration File
+version = 1.0
+name = Singing Bowl (Stribeck Friction)
+preset_id = 4
+wave_speed = 0.25
+damping = 0.001
+curvature_scale = 1.2
+plate_fundamental = 432
+plate_stiffness = 1.8
+reverb_decay = 0.95
+reverb_mix = 0.5
+tuning_scale = Slendro

@@ -1,0 +1,188 @@
+#pragma once
+
+#include "../types.hpp"
+#include <vector>
+#include <string>
+#include <iostream>
+#include <cmath>
+#include <algorithm>
+#include <span>
+
+namespace aether::ui {
+
+/**
+ * @brief High-Resolution Terminal Unicode Braille & ANSI TrueColor Visualizer.
+ *
+ * Utilizes Unicode Braille Patterns (U+2800..U+28FF) where each character cell
+ * represents a 2x4 sub-pixel dot matrix, providing a 160x80+ graphical canvas
+ * directly inside modern command-line terminals with zero dependencies.
+ */
+class TerminalVisualizer {
+public:
+    /**
+     * @brief Encode 2x4 subpixel dot grid into a 3-byte UTF-8 Braille character.
+     *
+     * Dot mapping:
+     *   (0,0) -> 0x01   (1,0) -> 0x08
+     *   (0,1) -> 0x02   (1,1) -> 0x10
+     *   (0,2) -> 0x04   (1,2) -> 0x20
+     *   (0,3) -> 0x40   (1,3) -> 0x80
+     */
+    static std::string braille_char(uint8_t mask) {
+        std::string s;
+        s.reserve(3);
+        s.push_back(static_cast<char>(0xE2));
+        s.push_back(static_cast<char>(0xA0 | ((mask >> 6) & 0x03)));
+        s.push_back(static_cast<char>(0x80 | (mask & 0x3F)));
+        return s;
+    }
+
+    /**
+     * @brief 2D Sub-pixel Bitmap Canvas for Braille Terminal Rendering.
+     */
+    class BrailleCanvas {
+    public:
+        BrailleCanvas(int char_width, int char_height)
+            : char_w_(char_width), char_h_(char_height),
+              pixel_w_(char_width * 2), pixel_h_(char_height * 4),
+              pixels_(pixel_w_ * pixel_h_, false) {}
+
+        [[nodiscard]] int pixel_width() const noexcept { return pixel_w_; }
+        [[nodiscard]] int pixel_height() const noexcept { return pixel_h_; }
+
+        void clear() noexcept {
+            std::fill(pixels_.begin(), pixels_.end(), false);
+        }
+
+        void set_pixel(int px, int py, bool val = true) noexcept {
+            if (px >= 0 && px < pixel_w_ && py >= 0 && py < pixel_h_) {
+                pixels_[py * pixel_w_ + px] = val;
+            }
+        }
+
+        /**
+         * @brief Render the canvas to an ANSI terminal string with colors.
+         */
+        [[nodiscard]] std::string render_ansi(const std::string& color_code = "\033[1;36m") const {
+            std::string out;
+            out += color_code;
+
+            for (int cy = 0; cy < char_h_; ++cy) {
+                out += "  ";
+                for (int cx = 0; cx < char_w_; ++cx) {
+                    uint8_t mask = 0;
+                    const int base_x = cx * 2;
+                    const int base_y = cy * 4;
+
+                    if (get_pix(base_x, base_y))     mask |= 0x01;
+                    if (get_pix(base_x, base_y + 1)) mask |= 0x02;
+                    if (get_pix(base_x, base_y + 2)) mask |= 0x04;
+                    if (get_pix(base_x + 1, base_y)) mask |= 0x08;
+                    if (get_pix(base_x + 1, base_y + 1)) mask |= 0x10;
+                    if (get_pix(base_x + 1, base_y + 2)) mask |= 0x20;
+                    if (get_pix(base_x, base_y + 3)) mask |= 0x40;
+                    if (get_pix(base_x + 1, base_y + 3)) mask |= 0x80;
+
+                    out += braille_char(mask);
+                }
+                out += "\n";
+            }
+            out += "\033[0m";
+            return out;
+        }
+
+    private:
+        [[nodiscard]] bool get_pix(int px, int py) const noexcept {
+            if (px < 0 || px >= pixel_w_ || py < 0 || py >= pixel_h_) return false;
+            return pixels_[py * pixel_w_ + px];
+        }
+
+        int char_w_;
+        int char_h_;
+        int pixel_w_;
+        int pixel_h_;
+        std::vector<bool> pixels_;
+    };
+
+    /**
+     * @brief Render Audio Waveform Oscilloscope in Braille.
+     */
+    static void display_waveform(std::span<const StereoFrame> frames, int char_w = 64, int char_h = 10) {
+        BrailleCanvas canvas(char_w, char_h);
+        const int px_w = canvas.pixel_width();
+        const int px_h = canvas.pixel_height();
+        const int mid_y = px_h / 2;
+
+        if (frames.empty()) return;
+
+        float max_peak = 1e-6f;
+        for (const auto& f : frames) {
+            max_peak = std::max({max_peak, std::abs(f.left), std::abs(f.right)});
+        }
+        const float norm_scale = max_peak > 1e-4f ? (0.92f / max_peak) : 1.0f;
+
+        const float step = static_cast<float>(frames.size()) / px_w;
+
+        for (int x = 0; x < px_w; ++x) {
+            const size_t s_start = static_cast<size_t>(x * step);
+            const size_t s_end = std::min(static_cast<size_t>((x + 1) * step), frames.size());
+
+            float local_min = 0.0f;
+            float local_max = 0.0f;
+
+            for (size_t s = s_start; s < s_end; ++s) {
+                const float mono = (frames[s].left + frames[s].right) * 0.5f * norm_scale;
+                if (mono < local_min) local_min = mono;
+                if (mono > local_max) local_max = mono;
+            }
+
+            const int y1 = std::clamp(mid_y - static_cast<int>(local_max * (mid_y - 1)), 0, px_h - 1);
+            const int y2 = std::clamp(mid_y - static_cast<int>(local_min * (mid_y - 1)), 0, px_h - 1);
+
+            if (local_max - local_min > 0.02f) {
+                for (int y = y1; y <= y2; ++y) {
+                    canvas.set_pixel(x, y, true);
+                }
+            } else {
+                canvas.set_pixel(x, mid_y, (x % 3 == 0)); // Dotted baseline on silence
+            }
+        }
+
+        std::cout << canvas.render_ansi("\033[1;36m");
+    }
+
+    /**
+     * @brief Render 2D Poincare Pressure/Displacement Disk in Braille.
+     */
+    static void display_poincare_disk(const std::vector<float>& grid, int grid_size, int char_size = 28) {
+        BrailleCanvas canvas(char_size, char_size / 2);
+        const int px_w = canvas.pixel_width();
+        const int px_h = canvas.pixel_height();
+        const float r_disk = std::min(px_w, px_h) * 0.48f;
+        const float cx = px_w * 0.5f;
+        const float cy = px_h * 0.5f;
+
+        for (int py = 0; py < px_h; ++py) {
+            for (int px = 0; px < px_w; ++px) {
+                const float dx = (px - cx) / r_disk;
+                const float dy = (py - cy) / r_disk;
+                const float r2 = dx * dx + dy * dy;
+
+                if (r2 <= 1.0f) {
+                    // Map unit disk to grid
+                    const int gx = std::clamp(static_cast<int>((dx * 0.5f + 0.5f) * (grid_size - 1)), 0, grid_size - 1);
+                    const int gy = std::clamp(static_cast<int>((dy * 0.5f + 0.5f) * (grid_size - 1)), 0, grid_size - 1);
+                    const float val = std::abs(grid[gy * grid_size + gx]);
+
+                    if (val > 0.08f || std::abs(r2 - 1.0f) < 0.06f) {
+                        canvas.set_pixel(px, py, true);
+                    }
+                }
+            }
+        }
+
+        std::cout << canvas.render_ansi("\033[1;35m");
+    }
+};
+
+} // namespace aether::ui

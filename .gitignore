@@ -21,7 +21,12 @@ CMakeCache.txt
 Thumbs.db
 .DS_Store
 
-# Output binaries and audio (optional to keep or gitignore)
+# Output binaries and audio
 *.exe
 *.pdb
 *.ilk
+*.dll
+*.so
+*.dylib
+output/*.wav
+

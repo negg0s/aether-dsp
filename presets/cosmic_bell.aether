@@ -1,0 +1,12 @@
+# AetherDSP Preset Configuration File
+version = 1.0
+name = Cosmic Bell (Poincare)
+preset_id = 0
+wave_speed = 0.45
+damping = 0.003
+curvature_scale = 1
+plate_fundamental = 220
+plate_stiffness = 1
+reverb_decay = 0.85
+reverb_mix = 0.35
+tuning_scale = Bohlen-Pierce

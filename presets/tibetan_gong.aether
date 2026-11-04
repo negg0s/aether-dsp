@@ -1,0 +1,12 @@
+# AetherDSP Preset Configuration File
+version = 1.0
+name = Tibetan Gong (Kirchhoff-Love)
+preset_id = 1
+wave_speed = 0.35
+damping = 0.005
+curvature_scale = 0.8
+plate_fundamental = 110
+plate_stiffness = 2.5
+reverb_decay = 0.92
+reverb_mix = 0.45
+tuning_scale = Wendy Carlos Beta

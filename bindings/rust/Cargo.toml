@@ -1,0 +1,14 @@
+[package]
+name = "aether-dsp"
+version = "1.1.0"
+edition = "2021"
+authors = ["Emir (negg0s)"]
+description = "Safe Rust bindings for AetherDSP Non-Euclidean Physical Modeling Synthesis Engine"
+license = "MIT"
+keywords = ["dsp", "audio", "synthesis", "physical-modelling", "non-euclidean"]
+
+[dependencies]
+
+[[example]]
+name = "render_bell"
+path = "examples/render_bell.rs"

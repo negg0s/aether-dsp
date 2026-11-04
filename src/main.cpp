@@ -1,8 +1,13 @@
 #include "aether/engine.hpp"
 #include "aether/wav_writer.hpp"
 #include "aether/wav_reader.hpp"
+#include "aether/svg_exporter.hpp"
+#include "aether/preset_manager.hpp"
 #include "aether/math/algorithmic_composer.hpp"
 #include "aether/math/hyperbolic_tiling.hpp"
+#include "aether/math/geodesic_raytracer.hpp"
+#include "aether/dsp/fx/convolution_reverb.hpp"
+#include "aether/ui/terminal_visualizer.hpp"
 #include "aether/audio/playback_device.hpp"
 #include "aether/midi/midi_file.hpp"
 #include "aether/dsp/tuning.hpp"
@@ -78,6 +83,35 @@ void print_ascii_cymatics(const aether::engines::ChladniPlate& plate) {
         std::cout << "\n";
     }
     std::cout << "\033[90m(Yellow '#' denotes Chladni nodal curves where acoustic vibrations cancel out)\033[0m\n\n";
+
+    // Also display high-resolution Unicode Braille Poincare disk
+    std::cout << "\033[1;36m--- [ 2D Poincare Hyperbolic Manifold Wavefront (Unicode Braille Canvas) ] ---\033[0m\n";
+    constexpr int POINCARE_GRID = 32;
+    std::vector<float> p_grid(POINCARE_GRID * POINCARE_GRID, 0.0f);
+    for (int y = 0; y < POINCARE_GRID; ++y) {
+        float ny = (y / static_cast<float>(POINCARE_GRID - 1)) * 2.0f - 1.0f;
+        for (int x = 0; x < POINCARE_GRID; ++x) {
+            float nx = (x / static_cast<float>(POINCARE_GRID - 1)) * 2.0f - 1.0f;
+            float r2 = nx * nx + ny * ny;
+            if (r2 < 0.95f) {
+                p_grid[y * POINCARE_GRID + x] = std::sin(r2 * 8.0f - 1.5f);
+            }
+        }
+    }
+    aether::ui::TerminalVisualizer::display_poincare_disk(p_grid, POINCARE_GRID, 36);
+    std::cout << "\033[90m(Magenta Braille sub-pixel matrix represents curved wavefronts on the Poincare disk)\033[0m\n\n";
+}
+
+void visualize_audio_file(const std::string& wav_file) {
+    std::cout << "\033[1;36m=== High-Resolution Terminal Braille Waveform Visualization ===\033[0m\n";
+    std::cout << "Loading: " << wav_file << "... ";
+    auto audio = aether::WavReader::read_wav(wav_file);
+    if (!audio.valid) {
+        std::cerr << "\033[1;31m[ERROR] Failed to load audio file.\033[0m\n";
+        return;
+    }
+    std::cout << "\033[1;32m[OK]\033[0m (" << audio.sample_rate << " Hz, " << audio.frames.size() << " frames)\n\n";
+    aether::ui::TerminalVisualizer::display_waveform(audio.frames, 72, 12);
 }
 
 void run_benchmark() {
@@ -252,6 +286,42 @@ void render_all_presets(const std::string& output_dir) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << binaural_path << "\n";
     }
 
+    // Render 09: Hyperbolic Geodesic Acoustic Ray-Traced Reverb
+    std::cout << "Rendering \033[1m09_hyperbolic_geodesic_reverb.wav\033[0m (Hamiltonian Geodesic Ray Tracer)... ";
+    std::cout.flush();
+    aether::math::GeodesicRayTracer::Config ray_cfg;
+    ray_cfg.num_rays = 128;
+    ray_cfg.step_dt = 0.001f;
+    ray_cfg.max_time = 0.8f;
+    ray_cfg.capture_radius = 0.08f;
+    aether::math::GeodesicRayTracer tracer(ray_cfg);
+    auto arrivals = tracer.trace({-0.3f, -0.2f}, {0.4f, 0.35f});
+    auto ir = tracer.synthesize_impulse_response(arrivals, SAMPLE_RATE, 0.8f);
+
+    aether::dsp::fx::ConvolutionReverb conv_rev;
+    conv_rev.load_impulse_response(ir, 0.45f);
+
+    aether::Engine rev_engine(SAMPLE_RATE);
+    rev_engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+    rev_engine.note_on({0.2f, 0.3f}, 0.9f);
+
+    constexpr size_t REV_SAMPLES = SAMPLE_RATE * 3;
+    std::vector<aether::StereoFrame> rev_frames(REV_SAMPLES);
+    std::vector<aether::StereoFrame> rev_block(BLOCK_SIZE);
+
+    for (size_t i = 0; i < REV_SAMPLES; i += BLOCK_SIZE) {
+        const size_t to_render = std::min(BLOCK_SIZE, REV_SAMPLES - i);
+        rev_engine.process_block(std::span<aether::StereoFrame>(rev_block.data(), to_render));
+        for (size_t s = 0; s < to_render; ++s) {
+            rev_frames[i + s] = conv_rev.process(rev_block[s]);
+        }
+    }
+
+    const std::string rev_path = (fs::path(output_dir) / "09_hyperbolic_geodesic_reverb.wav").string();
+    if (aether::WavWriter::write_stereo_wav(rev_path, rev_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << rev_path << "\n";
+    }
+
     // Export Standard MIDI File
     std::cout << "Exporting \033[1mfibonacci_score.mid\033[0m (Standard MIDI Format 1)... ";
     aether::midi::MidiFile mf;
@@ -268,10 +338,40 @@ void render_all_presets(const std::string& output_dir) {
     mf.tracks.push_back(std::move(trk));
     const std::string midi_out = (fs::path(output_dir) / "fibonacci_score.mid").string();
     if (mf.save(midi_out)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << midi_out << "\n\n";
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << midi_out << "\n";
     } else {
-        std::cout << "\033[1;31m[FAILED]\033[0m\n\n";
+        std::cout << "\033[1;31m[FAILED]\033[0m\n";
     }
+
+    // Export High-Resolution Mathematical Vector Graphics (SVG)
+    std::cout << "Exporting \033[1mchladni_nodal_lines.svg\033[0m (2D Modal Cymatics Vector Art)... ";
+    aether::engines::ChladniPlate svg_plate;
+    svg_plate.configure(220.0f, 1.2f);
+    svg_plate.strike({0.3f, 0.4f}, 1.0f);
+    const std::string chladni_svg_path = (fs::path(output_dir) / "chladni_nodal_lines.svg").string();
+    if (aether::SvgExporter::export_chladni_svg(svg_plate, chladni_svg_path, 800, 800)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << chladni_svg_path << "\n";
+    }
+
+    std::cout << "Exporting \033[1mpoincare_tiling.svg\033[0m (Hyperbolic {7,3} Reflection Tessellation)... ";
+    auto tiles = aether::math::HyperbolicTiling::generate_tiling(7, 3, 2);
+    const std::string poincare_svg_path = (fs::path(output_dir) / "poincare_tiling.svg").string();
+    if (aether::SvgExporter::export_poincare_tiling_svg(tiles, poincare_svg_path, 800)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << poincare_svg_path << "\n\n";
+    }
+
+    // Export Preset Configuration Examples
+    std::cout << "Exporting \033[1m.aether preset configurations\033[0m to presets/... ";
+    fs::create_directories("presets");
+    aether::AetherPresetData p_bell{"Cosmic Bell (Poincare)", 0, 0.45f, 0.003f, 1.0f, 220.0f, 1.0f, 0.85f, 0.35f, "Bohlen-Pierce"};
+    aether::PresetManager::save_preset("presets/cosmic_bell.aether", p_bell);
+
+    aether::AetherPresetData p_gong{"Tibetan Gong (Kirchhoff-Love)", 1, 0.35f, 0.005f, 0.8f, 110.0f, 2.5f, 0.92f, 0.45f, "Wendy Carlos Beta"};
+    aether::PresetManager::save_preset("presets/tibetan_gong.aether", p_gong);
+
+    aether::AetherPresetData p_bowl{"Singing Bowl (Stribeck Friction)", 4, 0.25f, 0.001f, 1.2f, 432.0f, 1.8f, 0.95f, 0.50f, "Slendro"};
+    aether::PresetManager::save_preset("presets/singing_bowl.aether", p_bowl);
+    std::cout << "\033[1;32m[DONE]\033[0m\n\n";
 }
 
 void resynthesize_wav(const std::string& input_wav, const std::string& output_wav) {
@@ -432,14 +532,34 @@ int main(int argc, char** argv) {
             std::string out_file = argv[++i];
             resynthesize_wav(in_file, out_file);
             return 0;
+        } else if (arg == "--visualize" && i + 1 < argc) {
+            std::string wav_file = argv[++i];
+            visualize_audio_file(wav_file);
+            return 0;
+        } else if (arg == "--export-svg") {
+            std::cout << "\033[1;36m=== Exporting High-Resolution Mathematical Vector Graphics (SVG) ===\033[0m\n";
+            fs::create_directories("output");
+            aether::engines::ChladniPlate plate;
+            plate.configure(220.0f, 1.2f);
+            plate.strike({0.3f, 0.4f}, 1.0f);
+            if (aether::SvgExporter::export_chladni_svg(plate, "output/chladni_nodal_lines.svg", 1000, 1000)) {
+                std::cout << "\033[1;32m[DONE]\033[0m Exported Chladni Nodal Plate -> output/chladni_nodal_lines.svg\n";
+            }
+            auto tiles = aether::math::HyperbolicTiling::generate_tiling(7, 3, 2);
+            if (aether::SvgExporter::export_poincare_tiling_svg(tiles, "output/poincare_tiling.svg", 1000)) {
+                std::cout << "\033[1;32m[DONE]\033[0m Exported Poincare {7,3} Tessellation -> output/poincare_tiling.svg\n";
+            }
+            return 0;
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: aether-dsp [options]\n";
             std::cout << "  --live, -l                       Launch live interactive synthesizer with audio hardware\n";
             std::cout << "  --sweep-bench                    Run spatial resolution FDTD scaling sweep\n";
             std::cout << "  --resynthesize <in.wav> <out.wav> Process and resynthesize WAV file through hyperbolic waveguide\n";
+            std::cout << "  --visualize <in.wav>             Render Unicode Braille waveform oscilloscope in terminal\n";
+            std::cout << "  --export-svg                     Export high-resolution Chladni and Poincare SVG vectors\n";
             std::cout << "  --bench                          Run AVX2 SIMD DSP throughput benchmark\n";
             std::cout << "  --render                         Render lossless audio presets & MIDI to output/*\n";
-            std::cout << "  --ascii                          Display terminal ASCII Chladni nodal plate\n";
+            std::cout << "  --ascii                          Display terminal ASCII & Braille cymatics\n";
             return 0;
         }
     }

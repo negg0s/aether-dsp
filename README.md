@@ -4,10 +4,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++20](https://img.shields.io/badge/Language-C%2B%2B20-00599C?logo=cplusplus)](https://en.cppreference.com/w/cpp/20)
 [![SIMD](https://img.shields.io/badge/SIMD-AVX2%20Fused%20Multiply--Add-blueviolet)](#)
-[![Python FFI](https://img.shields.io/badge/Python-ctypes%20C--ABI%20Zero--Copy-blue)](#)
+[![Python Package](https://img.shields.io/badge/Python-Package%20%26%20ctypes%20C--ABI-blue?logo=python)](bindings/python)
+[![Rust Crate](https://img.shields.io/badge/Rust-FFI%20Crate-orange?logo=rust)](bindings/rust)
 [![CLAP](https://img.shields.io/badge/Plugin-CLAP%20Native%20Standard-red)](#)
 [![Audio](https://img.shields.io/badge/Audio-WASAPI%20%7C%20CoreAudio%20%7C%20ALSA%20%7C%20WebAudio-success)](#)
 [![MIDI](https://img.shields.io/badge/MIDI-SMF%20Format%200%2F1-yellow)](#)
+[![Tests](https://img.shields.io/badge/Tests-20%20Invariant%20Tests%20Passed-brightgreen)](#)
 [![Zero-AI](https://img.shields.io/badge/Engine-100%25%20Pure%20Math%20%26%20DSP%20(No%20AI)-orange)](#)
 
 ```
@@ -28,20 +30,28 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
 
 - **2D Non-Euclidean Hyperbolic Waveguide (Poincaré Disk):**
   Solves the 2D wave equation on a Riemannian manifold with constant negative Gaussian curvature $K = -1$ using Finite-Difference Time-Domain (FDTD). Wavefronts expand exponentially towards the horocycle boundary without modal flutter.
+- **Hamiltonian Geodesic Sound Ray Tracer & Manifold Convolution Reverb:**
+  Integrates Christoffel geodesic equations $\ddot{x}^i + \Gamma^i_{jk}\dot{x}^j\dot{x}^k = 0$ using 4th-order Runge-Kutta numerical integration to trace acoustic rays along curved hyperbolic geodesics and synthesize Manifold Impulse Responses (MIR).
 - **AVX2 SIMD Vectorized FDTD Kernel:**
   Processes 8 spatial grid cells per instruction using 8-wide vectorized fused multiply-add (`_mm256_fmadd_ps`) operations.
+- **Terminal Unicode Braille Canvas & Waveform Oscilloscope:**
+  High-resolution sub-pixel graphics engine inside standard terminals using Unicode Braille Patterns (U+2800..U+28FF) for live 160x80+ oscilloscopes and Poincaré disk pressure maps.
+- **Stribeck Stick-Slip Non-Linear Friction Exciter:**
+  Physically models continuous friction bowing (crystal singing bowls, glass harmonicas) with static/kinetic friction transitions and velocity thresholding.
 - **3D Binaural HRTF Spatializer (Woodworth Spherical Head Model):**
   Calculates true Interaural Time Difference (ITD: $\Delta t = \frac{a}{c}(\theta + \sin\theta)$) and Interaural Level Difference (ILD) with frequency-dependent head shadowing, allowing sounds to orbit 360-degrees around the listener's head.
 - **2D Modal Cymatics Plate (Kirchhoff-Love Thin Elastic Plate):**
   Calculates the analytical biharmonic eigenmode lattice of vibrating thin plates with customizable stiffness and Poisson ratios. Computes exact nodal lines ($u(x,y) = 0$) where sand accumulates in real-time.
-- **Microtonal Tuning Engine (Bohlen-Pierce & Scala .scl Support):**
-  Non-Euclidean scales dividing the tritave (3:1) into 13 equal steps, perfectly matching the inharmonic mode distribution of 2D circular/square plates. Includes full Scala `.scl` file parsing.
+- **High-Resolution SVG Vector Graphics Exporter:**
+  Exports mathematically exact Chladni nodal curves and Poincaré $\{7, 3\}$ reflection group tessellations to crisp, scalable `.svg` vector files.
+- **Microtonal Tuning Engine & Scala Catalog:**
+  Embedded library of 8 exotic scales (Bohlen-Pierce 13-EDT, Wendy Carlos Alpha & Beta, Javanese Slendro, Balinese Pelog, Harry Partch 43-tone, Fibonacci Golden Ratio) plus full `.scl` file parsing.
 - **Hyperbolic Feedback Delay Network (FDN) Reverb:**
   4-channel unitary Householder feedback matrix with mutually prime delay lines derived from the $\{7, 3\}$ hyperbolic heptagonal tessellation.
 - **Standard MIDI File (SMF 0/1) Engine:**
   Zero-dependency binary parser and serializer for `.mid` files. Export and sequence scores directly into digital audio workstations (DAWs).
-- **C-ABI Dynamic Library & Python Integration:**
-  Exported C ABI (`aether-dsp.dll` / `libaether-dsp.so`) with zero-copy buffer passing for seamless integration into Python (`ctypes`), Rust, or game engines (Godot/Unreal).
+- **Python Package & Rust FFI Crates:**
+  Full pip-installable Python package (`bindings/python/`) with typed classes and pure-Python spectral analyzer, alongside a complete Rust crate (`bindings/rust/`).
 - **CLAP (CLever Audio Plugin) Architecture:**
   Standard-compliant native CLAP plugin definitions for DAW hosting (Bitwig, Reaper, FL Studio).
 - **Live Real-Time Audio Hardware Streaming:**
@@ -170,7 +180,11 @@ Drive the Poincaré hyperbolic waveguide with any external audio sample:
 | `05_fibonacci_non_euclidean_sonata.wav` | 32-bit Float WAV | Algorithmic polyphonic sonata based on Fibonacci & Xenakis sieve |
 | `06_binaural_3d_orbit_demo.wav` | 32-bit Float WAV | 3D Woodworth spherical head model binaural 360-degree orbit |
 | `07_hyperbolic_resynthesized_gong.wav` | 32-bit Float WAV | Acoustic resynthesis driven by external audio excitation |
+| `08_bowed_crystal_plate.wav` | 32-bit Float WAV | Continuous Stribeck non-linear stick-slip friction crystal bowing |
+| `09_hyperbolic_geodesic_reverb.wav` | 32-bit Float WAV | Hamiltonian geodesic sound ray-traced convolution reverb |
 | `fibonacci_score.mid` | Standard MIDI Format 1 | Exported polyphonic score ready for DAW import (Ableton/FL Studio) |
+| `chladni_nodal_lines.svg` | Scalable Vector Graphics | 800x800 high-res vector visualization of Chladni nodal plate |
+| `poincare_tiling.svg` | Scalable Vector Graphics | 800x800 high-res vector art of Poincaré {7,3} hyperbolic tessellation |
 
 ---
 
@@ -184,7 +198,11 @@ aether-dsp/
 │   ├── ring_buffer.hpp            # Lock-free, wait-free SPSC ring buffer (cache-line aligned)
 │   ├── wav_writer.hpp             # Lossless RIFF WAV exporter (32-bit float / 24-bit PCM)
 │   ├── wav_reader.hpp             # Zero-dependency RIFF WAV reader & decoder
+│   ├── svg_exporter.hpp           # Vector graphics (.svg) exporter for Chladni curves & tilings
+│   ├── preset_manager.hpp         # Human-readable .aether preset file parser & serializer
 │   ├── engine.hpp                 # Master engine orchestrator, voices & FDN reverb
+│   ├── ui/
+│   │   └── terminal_visualizer.hpp # Unicode Braille sub-pixel waveform & Poincaré disk canvas
 │   ├── audio/
 │   │   ├── miniaudio.h            # Single-header cross-platform audio hardware driver
 │   │   └── playback_device.hpp    # Low-latency audio streaming wrapper
@@ -196,28 +214,46 @@ aether-dsp/
 │   │   ├── poincare.hpp           # Riemannian metric, conformal factors, geodesic distance
 │   │   ├── runge_kutta.hpp        # 4th-order Runge-Kutta ODE numerical solver
 │   │   ├── hyperbolic_tiling.hpp  # Non-Euclidean {7, 3} & {5, 4} tessellation generator
+│   │   ├── geodesic_raytracer.hpp # Hamiltonian geodesic sound ray tracer on curved manifolds
 │   │   └── algorithmic_composer.hpp # Xenakis Sieve & Fibonacci score generator
 │   ├── dsp/
 │   │   ├── biquad.hpp             # Direct Form II Transposed biquad filter
 │   │   ├── envelope.hpp           # Sample-accurate exponential ADSR envelope
 │   │   ├── tuning.hpp             # Microtonal tuning engine (Bohlen-Pierce & Scala .scl)
+│   │   ├── scala_catalog.hpp      # Bank of 8 historical & mathematical microtonal scales
 │   │   └── fx/
 │   │       ├── hyperbolic_reverb.hpp # 4-channel unitary Householder FDN reverb
+│   │       ├── convolution_reverb.hpp# Time-domain convolution for Manifold Impulse Responses
 │   │       └── binaural_panner.hpp   # 3D Woodworth spherical head binaural spatializer
 │   └── engines/
 │       ├── hyperbolic_waveguide.hpp # AVX2 SIMD Non-Euclidean FDTD hyperbolic wave solver
 │       ├── chladni_plate.hpp        # Kirchhoff-Love 2D thin plate modal synthesizer
+│       ├── stick_slip_exciter.hpp   # Stribeck non-linear friction stick-slip continuous exciter
 │       └── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
+├── bindings/
+│   ├── python/                    # Pip-installable Python package (pyproject.toml, setup.py)
+│   └── rust/                      # Complete Rust crate with C-ABI bindings (Cargo.toml)
 ├── src/
-│   ├── main.cpp                   # CLI benchmark, live hardware audio, MIDI exporter
+│   ├── main.cpp                   # CLI dashboard, live audio, Braille visualizer & benchmarks
 │   ├── audio_device.cpp           # Miniaudio hardware backend compilation unit
 │   └── c_api.cpp                  # C-ABI implementation
 ├── tests/
-│   └── unit_tests.cpp             # 13 extended mathematical invariants & audio stability tests
+│   └── unit_tests.cpp             # 20 extended mathematical invariants & audio stability tests
 ├── examples/
-│   └── python_demo.py             # Python ctypes zero-dependency integration demo
+│   ├── python_demo.py             # Python ctypes zero-dependency integration demo
+│   └── spectral_analysis.py       # Pure-Python physical inharmonicity & DFT spectral analyzer
 ├── scripts/
+│   ├── build_msvc.bat             # Fast MSVC 2026 build script
 │   ├── build_wasm.bat             # Emscripten WebAssembly build script (Windows)
+│   └── build_wasm.sh              # Emscripten WebAssembly build script (Linux/macOS)
+├── presets/
+│   ├── cosmic_bell.aether         # Poincaré disk hyperbolic resonator preset
+│   ├── singing_bowl.aether        # Stribeck stick-slip friction singing bowl preset
+│   └── tibetan_gong.aether        # Kirchhoff-Love thin elastic plate gong preset
+├── web/
+│   ├── index.html                 # Standalone interactive browser GUI & 3D wireframe
+│   └── app.js                     # 3D Canvas visualizer, sand physics & Web Audio synth
+└── CMakeLists.txt
 │   └── build_wasm.sh              # Emscripten WebAssembly build script (Linux/macOS)
 ├── web/
 │   ├── index.html                 # Standalone interactive browser GUI & 3D wireframe
