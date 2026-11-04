@@ -183,6 +183,80 @@ public:
 
         std::cout << canvas.render_ansi("\033[1;35m");
     }
+
+    /**
+     * @brief Render Stereo VU meter bar in ANSI TrueColor.
+     */
+    static std::string render_vu_meter(float left_peak, float right_peak, int width = 28) {
+        auto make_bar = [width](float level) {
+            std::string b = "[";
+            const int filled = std::clamp(static_cast<int>(level * width), 0, width);
+            for (int i = 0; i < width; ++i) {
+                if (i < filled) {
+                    if (i > width * 0.85f) b += "\033[1;31m█\033[0m";
+                    else if (i > width * 0.65f) b += "\033[1;33m█\033[0m";
+                    else b += "\033[1;32m█\033[0m";
+                } else {
+                    b += "\033[90m░\033[0m";
+                }
+            }
+            b += "]";
+            return b;
+        };
+
+        const float l_db = left_peak > 1e-4f ? 20.0f * std::log10(left_peak) : -80.0f;
+        const float r_db = right_peak > 1e-4f ? 20.0f * std::log10(right_peak) : -80.0f;
+
+        std::string res;
+        res += "  \033[1mL:\033[0m " + make_bar(std::clamp(left_peak, 0.0f, 1.0f)) + " " + std::to_string(static_cast<int>(l_db)) + " dB\n";
+        res += "  \033[1mR:\033[0m " + make_bar(std::clamp(right_peak, 0.0f, 1.0f)) + " " + std::to_string(static_cast<int>(r_db)) + " dB\n";
+        return res;
+    }
+
+    /**
+     * @brief Return waveform Braille visualization as a string for real-time live displays.
+     */
+    static std::string get_waveform_string(std::span<const StereoFrame> frames, int char_w = 64, int char_h = 8) {
+        BrailleCanvas canvas(char_w, char_h);
+        const int px_w = canvas.pixel_width();
+        const int px_h = canvas.pixel_height();
+        const int mid_y = px_h / 2;
+
+        if (frames.empty()) return canvas.render_ansi("\033[1;36m");
+
+        float max_peak = 1e-6f;
+        for (const auto& f : frames) {
+            max_peak = std::max({max_peak, std::abs(f.left), std::abs(f.right)});
+        }
+        const float norm_scale = max_peak > 1e-4f ? (0.92f / max_peak) : 1.0f;
+        const float step = static_cast<float>(frames.size()) / px_w;
+
+        for (int x = 0; x < px_w; ++x) {
+            const size_t s_start = static_cast<size_t>(x * step);
+            const size_t s_end = std::min(static_cast<size_t>((x + 1) * step), frames.size());
+
+            float local_min = 0.0f;
+            float local_max = 0.0f;
+            for (size_t s = s_start; s < s_end; ++s) {
+                const float mono = (frames[s].left + frames[s].right) * 0.5f * norm_scale;
+                if (mono < local_min) local_min = mono;
+                if (mono > local_max) local_max = mono;
+            }
+
+            const int y1 = std::clamp(mid_y - static_cast<int>(local_max * (mid_y - 1)), 0, px_h - 1);
+            const int y2 = std::clamp(mid_y - static_cast<int>(local_min * (mid_y - 1)), 0, px_h - 1);
+
+            if (local_max - local_min > 0.02f) {
+                for (int y = y1; y <= y2; ++y) {
+                    canvas.set_pixel(x, y, true);
+                }
+            } else {
+                canvas.set_pixel(x, mid_y, (x % 3 == 0));
+            }
+        }
+
+        return canvas.render_ansi("\033[1;36m");
+    }
 };
 
 } // namespace aether::ui

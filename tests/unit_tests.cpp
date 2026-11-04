@@ -17,6 +17,8 @@
 #include "aether/svg_exporter.hpp"
 #include "aether/preset_manager.hpp"
 #include "aether/math/geodesic_raytracer.hpp"
+#include "aether/math/hyperbolic_halfplane.hpp"
+#include "aether/engines/von_karman_plate.hpp"
 #include "aether/dsp/fx/convolution_reverb.hpp"
 #include "aether/ui/terminal_visualizer.hpp"
 #include "aether/plugin/clap_entry.hpp"
@@ -389,8 +391,60 @@ void test_braille_visualizer() {
     std::cout << "PASSED\n";
 }
 
+void test_von_karman_plate() {
+    std::cout << "[TEST] Nonlinear von Karman Large-Deflection Plate... ";
+    aether::engines::VonKarmanPlate plate(48000);
+    plate.init_modes(110.0f, 1.2f, 0.75f);
+    assert(!plate.modes().empty());
+    assert(plate.modes().size() >= 20);
+
+    plate.strike({0.3f, 0.4f}, 1.5f);
+
+    for (int i = 0; i < 1000; ++i) {
+        auto frame = plate.step();
+        assert(!std::isnan(frame.left));
+        assert(!std::isnan(frame.right));
+        assert(!std::isinf(frame.left));
+        assert(!std::isinf(frame.right));
+        assert(std::abs(frame.left) <= 1.0f); // Soft tanh limit
+        assert(std::abs(frame.right) <= 1.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_hyperbolic_halfplane() {
+    std::cout << "[TEST] Poincare Upper Half-Plane & Mobius PSL(2, R)... ";
+    using namespace aether::math;
+    using Complex = std::complex<double>;
+
+    // Cayley transform roundtrip: D -> H^2 -> D
+    Complex origin(0.0, 0.0);
+    Complex pt_h = HyperbolicHalfPlane::disk_to_halfplane(origin);
+    assert(std::abs(pt_h.real()) < 1e-6);
+    assert(std::abs(pt_h.imag() - 1.0) < 1e-6); // Origin maps to i
+
+    Complex back = HyperbolicHalfPlane::halfplane_to_disk(pt_h);
+    assert(std::abs(back.real()) < 1e-6);
+    assert(std::abs(back.imag()) < 1e-6);
+
+    // Mobius transform isometry
+    HyperbolicHalfPlane::MobiusTransform T{1.0, 1.0, 0.0, 1.0}; // Translation z + 1
+    assert(std::abs(T.determinant() - 1.0) < 1e-6);
+    Complex moved = T.apply(pt_h);
+    assert(std::abs(moved.real() - 1.0) < 1e-6);
+    assert(std::abs(moved.imag() - 1.0) < 1e-6);
+
+    // Modular delay taps
+    auto taps = HyperbolicHalfPlane::generate_modular_delay_taps(8, 20.0f);
+    assert(taps.size() == 8);
+    for (float tap : taps) {
+        assert(tap >= 20.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (20 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (22 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -411,6 +465,8 @@ int main() {
     test_geodesic_raytracer();
     test_convolution_reverb();
     test_braille_visualizer();
-    std::cout << "\033[1;32mALL 20 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_von_karman_plate();
+    test_hyperbolic_halfplane();
+    std::cout << "\033[1;32mALL 22 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

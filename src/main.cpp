@@ -5,7 +5,9 @@
 #include "aether/preset_manager.hpp"
 #include "aether/math/algorithmic_composer.hpp"
 #include "aether/math/hyperbolic_tiling.hpp"
+#include "aether/math/hyperbolic_halfplane.hpp"
 #include "aether/math/geodesic_raytracer.hpp"
+#include "aether/engines/von_karman_plate.hpp"
 #include "aether/dsp/fx/convolution_reverb.hpp"
 #include "aether/ui/terminal_visualizer.hpp"
 #include "aether/audio/playback_device.hpp"
@@ -112,6 +114,59 @@ void visualize_audio_file(const std::string& wav_file) {
     }
     std::cout << "\033[1;32m[OK]\033[0m (" << audio.sample_rate << " Hz, " << audio.frames.size() << " frames)\n\n";
     aether::ui::TerminalVisualizer::display_waveform(audio.frames, 72, 12);
+}
+
+void play_wav_live(const std::string& wav_file) {
+    std::cout << "\033[1;36m=== Live Interactive Hardware Audio Playback & Terminal Oscilloscope ===\033[0m\n";
+    std::cout << "Loading: " << wav_file << "... ";
+    const auto audio = aether::WavReader::read_wav(wav_file);
+    if (!audio.valid) {
+        std::cerr << "\033[1;31m[ERROR] Failed to load audio file.\033[0m\n";
+        return;
+    }
+    std::cout << "\033[1;32m[OK]\033[0m (" << audio.sample_rate << " Hz, " << audio.frames.size() << " frames, "
+              << static_cast<double>(audio.frames.size()) / audio.sample_rate << " sec)\n\n";
+
+    aether::audio::WavPlayerDevice player(audio.frames, audio.sample_rate);
+    if (!player.start()) {
+        std::cerr << "[ERROR] Could not start audio hardware playback.\n";
+        return;
+    }
+
+    std::cout << "\033[1;33m[PLAYING]\033[0m Press \033[1m[Q]\033[0m or \033[1m[ESC]\033[0m to stop.\n\n";
+
+    constexpr size_t WINDOW_SIZE = 1024;
+    std::vector<aether::StereoFrame> win_buf(WINDOW_SIZE, aether::StereoFrame{0.0f, 0.0f});
+
+    while (!player.is_finished()) {
+#if defined(_WIN32)
+        if (_kbhit()) {
+            int ch = _getch();
+            if (ch == 'q' || ch == 'Q' || ch == 27) break;
+        }
+#endif
+        const size_t cur = player.current_frame();
+        const size_t start_idx = cur >= WINDOW_SIZE ? cur - WINDOW_SIZE : 0;
+        const size_t count = std::min(WINDOW_SIZE, audio.frames.size() - start_idx);
+        for (size_t i = 0; i < count; ++i) {
+            win_buf[i] = audio.frames[start_idx + i];
+        }
+
+        std::cout << "\033[H"; // Home cursor
+        std::cout << "\033[1;36m[AetherDSP Live Oscilloscope - " << fs::path(wav_file).filename().string() << "]\033[0m\n";
+        std::cout << "Position: " << std::fixed << std::setprecision(2)
+                  << (static_cast<double>(cur) / audio.sample_rate) << " / "
+                  << (static_cast<double>(audio.frames.size()) / audio.sample_rate) << " s\n\n";
+
+        std::cout << aether::ui::TerminalVisualizer::get_waveform_string(win_buf, 68, 7);
+        std::cout << aether::ui::TerminalVisualizer::render_vu_meter(player.current_peak_left(), player.current_peak_right(), 28);
+        std::cout.flush();
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(33)); // ~30 FPS
+    }
+
+    player.stop();
+    std::cout << "\n\033[1;32m[PLAYBACK COMPLETE]\033[0m\n";
 }
 
 void run_benchmark() {
@@ -320,6 +375,23 @@ void render_all_presets(const std::string& output_dir) {
     const std::string rev_path = (fs::path(output_dir) / "09_hyperbolic_geodesic_reverb.wav").string();
     if (aether::WavWriter::write_stereo_wav(rev_path, rev_frames, SAMPLE_RATE, true)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << rev_path << "\n";
+    }
+
+    // Render 10: Nonlinear Föppl-von Kármán Large-Deflection Turbulent Gong
+    std::cout << "Rendering \033[1m10_von_karman_turbulent_gong.wav\033[0m (Nonlinear von Karman Dynamics)... ";
+    std::cout.flush();
+    aether::engines::VonKarmanPlate gong_plate(SAMPLE_RATE);
+    gong_plate.init_modes(90.0f, 1.25f, 0.85f);
+    gong_plate.strike({0.35f, 0.40f}, 1.2f, 0.003f);
+
+    constexpr size_t GONG_SAMPLES = SAMPLE_RATE * 4;
+    std::vector<aether::StereoFrame> gong_frames(GONG_SAMPLES);
+    for (size_t s = 0; s < GONG_SAMPLES; ++s) {
+        gong_frames[s] = gong_plate.step();
+    }
+    const std::string gong_path = (fs::path(output_dir) / "10_von_karman_turbulent_gong.wav").string();
+    if (aether::WavWriter::write_stereo_wav(gong_path, gong_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << gong_path << "\n";
     }
 
     // Export Standard MIDI File
@@ -532,6 +604,10 @@ int main(int argc, char** argv) {
             std::string out_file = argv[++i];
             resynthesize_wav(in_file, out_file);
             return 0;
+        } else if (arg == "--play" && i + 1 < argc) {
+            std::string wav_file = argv[++i];
+            play_wav_live(wav_file);
+            return 0;
         } else if (arg == "--visualize" && i + 1 < argc) {
             std::string wav_file = argv[++i];
             visualize_audio_file(wav_file);
@@ -553,6 +629,7 @@ int main(int argc, char** argv) {
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: aether-dsp [options]\n";
             std::cout << "  --live, -l                       Launch live interactive synthesizer with audio hardware\n";
+            std::cout << "  --play <in.wav>                  Play audio file with live rolling Braille oscilloscope & VU meter\n";
             std::cout << "  --sweep-bench                    Run spatial resolution FDTD scaling sweep\n";
             std::cout << "  --resynthesize <in.wav> <out.wav> Process and resynthesize WAV file through hyperbolic waveguide\n";
             std::cout << "  --visualize <in.wav>             Render Unicode Braille waveform oscilloscope in terminal\n";

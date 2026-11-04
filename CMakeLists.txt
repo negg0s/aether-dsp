@@ -44,3 +44,13 @@ add_executable(aether-tests
 
 enable_testing()
 add_test(NAME AetherUnitTests COMMAND aether-tests)
+
+# Installation rules & Package export
+include(GNUInstallDirs)
+install(TARGETS aether-dsp aether-dsp-shared aether-tests
+    EXPORT AetherDSPTargets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
