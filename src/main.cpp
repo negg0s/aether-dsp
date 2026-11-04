@@ -17,6 +17,8 @@
 #include "aether/dsp/tuning.hpp"
 #include "aether/dsp/scala_catalog.hpp"
 #include "aether/dsp/fx/binaural_panner.hpp"
+#include "aether/engines/hamiltonian_chaos.hpp"
+#include "aether/polyphony.hpp"
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -128,6 +130,59 @@ void spectrogram_audio_file(const std::string& wav_file) {
     }
     std::cout << "\033[1;32m[OK]\033[0m (" << audio.sample_rate << " Hz, " << audio.frames.size() << " frames)\n\n";
     aether::ui::TerminalVisualizer::display_spectrogram(audio.frames, audio.sample_rate, 64, 18);
+}
+
+void run_phase_space_demo() {
+    std::cout << "\033[1;36m=== 2D Symplectic Phase Space: Henon-Heiles Galactic Hamiltonian ===\033[0m\n";
+    std::cout << "Integrating 4D phase space (x, y, px, py) via 4th-Order Symplectic Yoshida Integrator...\n\n";
+
+    aether::engines::HenonHeilesOscillator henon(0.135, 120.0);
+    std::vector<std::pair<float, float>> trajectory;
+    trajectory.reserve(5000);
+
+    float min_x = 1e6f, max_x = -1e6f;
+    float min_y = 1e6f, max_y = -1e6f;
+
+    for (int step = 0; step < 5000; ++step) {
+        henon.step(48000.0f);
+        const auto& state = henon.state();
+        float sx = static_cast<float>(state.x);
+        float sy = static_cast<float>(state.y);
+        trajectory.push_back({sx, sy});
+
+        if (sx < min_x) min_x = sx;
+        if (sx > max_x) max_x = sx;
+        if (sy < min_y) min_y = sy;
+        if (sy > max_y) max_y = sy;
+    }
+
+    min_x -= 0.05f; max_x += 0.05f;
+    min_y -= 0.05f; max_y += 0.05f;
+
+    aether::ui::TerminalVisualizer::display_phase_space(
+        trajectory, min_x, max_x, min_y, max_y, 48, 16,
+        "Henon-Heiles Stellar Orbit in Galactic Potential V(x, y)"
+    );
+
+    // Also display momentum phase space (x, px)
+    std::vector<std::pair<float, float>> momentum_space;
+    momentum_space.reserve(5000);
+    float min_px = 1e6f, max_px = -1e6f;
+    for (int step = 0; step < 5000; ++step) {
+        henon.step(48000.0f);
+        const auto& state = henon.state();
+        float sx = static_cast<float>(state.x);
+        float spx = static_cast<float>(state.px);
+        momentum_space.push_back({sx, spx});
+        if (spx < min_px) min_px = spx;
+        if (spx > max_px) max_px = spx;
+    }
+    min_px -= 0.05f; max_px += 0.05f;
+
+    aether::ui::TerminalVisualizer::display_phase_space(
+        momentum_space, min_x, max_x, min_px, max_px, 48, 16,
+        "Symplectic Phase Space Invariant Manifold (x, px)"
+    );
 }
 
 void play_wav_live(const std::string& wav_file) {
@@ -257,7 +312,10 @@ void run_sweep_benchmark() {
 void render_all_presets(const std::string& output_dir) {
     std::cout << "\033[1;34m=== Rendering Lossless 32-bit Float Audio Presets ===\033[0m\n";
 
-    fs::create_directories(output_dir);
+    const std::string base_dir = fs::exists("D:/Projects/aether-dsp") ? "D:/Projects/aether-dsp" : ".";
+    const std::string final_out_dir = (fs::path(base_dir) / output_dir).string();
+    fs::create_directories(final_out_dir);
+
     constexpr uint32_t SAMPLE_RATE = 48000;
     constexpr size_t DURATION_SEC = 3;
     constexpr size_t TOTAL_SAMPLES = SAMPLE_RATE * DURATION_SEC;
@@ -299,7 +357,7 @@ void render_all_presets(const std::string& output_dir) {
             written += to_render;
         }
 
-        const std::string out_path = (fs::path(output_dir) / item.name).string();
+        const std::string out_path = (fs::path(final_out_dir) / item.name).string();
         const bool ok = aether::WavWriter::write_stereo_wav(out_path, audio_data, SAMPLE_RATE, true);
         if (ok) {
             std::cout << "\033[1;32m[DONE]\033[0m -> " << out_path << "\n";
@@ -315,7 +373,7 @@ void render_all_presets(const std::string& output_dir) {
     const auto score = aether::math::AlgorithmicComposer::generate_fibonacci_score(SONATA_DURATION);
     const auto sonata_frames = aether::math::AlgorithmicComposer::render_score(score, SONATA_DURATION, SAMPLE_RATE);
 
-    const std::string sonata_path = (fs::path(output_dir) / "05_fibonacci_non_euclidean_sonata.wav").string();
+    const std::string sonata_path = (fs::path(final_out_dir) / "05_fibonacci_non_euclidean_sonata.wav").string();
     const bool sonata_ok = aether::WavWriter::write_stereo_wav(sonata_path, sonata_frames, SAMPLE_RATE, true);
     if (sonata_ok) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << sonata_path << "\n";
@@ -350,7 +408,7 @@ void render_all_presets(const std::string& output_dir) {
             binaural_frames[i + s] = panner.process(mono);
         }
     }
-    const std::string binaural_path = (fs::path(output_dir) / "06_binaural_3d_orbit_demo.wav").string();
+    const std::string binaural_path = (fs::path(final_out_dir) / "06_binaural_3d_orbit_demo.wav").string();
     if (aether::WavWriter::write_stereo_wav(binaural_path, binaural_frames, SAMPLE_RATE, true)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << binaural_path << "\n";
     }
@@ -386,7 +444,7 @@ void render_all_presets(const std::string& output_dir) {
         }
     }
 
-    const std::string rev_path = (fs::path(output_dir) / "09_hyperbolic_geodesic_reverb.wav").string();
+    const std::string rev_path = (fs::path(final_out_dir) / "09_hyperbolic_geodesic_reverb.wav").string();
     if (aether::WavWriter::write_stereo_wav(rev_path, rev_frames, SAMPLE_RATE, true)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << rev_path << "\n";
     }
@@ -403,7 +461,7 @@ void render_all_presets(const std::string& output_dir) {
     for (size_t s = 0; s < GONG_SAMPLES; ++s) {
         gong_frames[s] = gong_plate.step();
     }
-    const std::string gong_path = (fs::path(output_dir) / "10_von_karman_turbulent_gong.wav").string();
+    const std::string gong_path = (fs::path(final_out_dir) / "10_von_karman_turbulent_gong.wav").string();
     if (aether::WavWriter::write_stereo_wav(gong_path, gong_frames, SAMPLE_RATE, true)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << gong_path << "\n";
     }
@@ -422,9 +480,54 @@ void render_all_presets(const std::string& output_dir) {
         }
         horn_frames[s] = horn.step();
     }
-    const std::string horn_path = (fs::path(output_dir) / "11_pseudosphere_tractrix_horn.wav").string();
+    const std::string horn_path = (fs::path(final_out_dir) / "11_pseudosphere_tractrix_horn.wav").string();
     if (aether::WavWriter::write_stereo_wav(horn_path, horn_frames, SAMPLE_RATE, true)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << horn_path << "\n";
+    }
+
+    // Render 12: Hénon-Heiles Galactic Hamiltonian Chaos
+    std::cout << "Rendering \033[1m12_henon_heiles_galactic_chaos.wav\033[0m (Astrophysical 4th-Order Symplectic Chaos)... ";
+    std::cout.flush();
+    aether::engines::HenonHeilesOscillator henon_osc(0.145, 340.0);
+    constexpr size_t HENON_SAMPLES = SAMPLE_RATE * 3;
+    std::vector<aether::StereoFrame> henon_frames(HENON_SAMPLES);
+    for (size_t s = 0; s < HENON_SAMPLES; ++s) {
+        henon_frames[s] = henon_osc.step(static_cast<float>(SAMPLE_RATE));
+    }
+    const std::string henon_path = (fs::path(final_out_dir) / "12_henon_heiles_galactic_chaos.wav").string();
+    if (aether::WavWriter::write_stereo_wav(henon_path, henon_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << henon_path << "\n";
+    }
+
+    // Render 13: 8-Voice Polyphonic Bohlen-Pierce Microtonal Cathedral
+    std::cout << "Rendering \033[1m13_polyphonic_microtonal_cathedral.wav\033[0m (8-Voice Polyphonic Resonators)... ";
+    std::cout.flush();
+    aether::Engine poly_engine(SAMPLE_RATE);
+    poly_engine.load_preset(aether::Preset::ChladniPlateGong);
+    constexpr size_t CHORD_DUR = SAMPLE_RATE * 1;
+    constexpr size_t TOTAL_POLY_SAMPLES = CHORD_DUR * 4;
+    std::vector<aether::StereoFrame> poly_frames(TOTAL_POLY_SAMPLES);
+    const int chords[4][4] = {
+        {60, 64, 67, 71},
+        {58, 63, 67, 70},
+        {57, 60, 65, 69},
+        {55, 62, 67, 72}
+    };
+
+    for (int c = 0; c < 4; ++c) {
+        poly_engine.all_notes_off();
+        for (int v = 0; v < 4; ++v) {
+            poly_engine.poly_note_on(chords[c][v], 0.75f);
+        }
+        std::vector<aether::StereoFrame> chord_block(CHORD_DUR);
+        poly_engine.process_block(chord_block);
+        for (size_t s = 0; s < CHORD_DUR; ++s) {
+            poly_frames[c * CHORD_DUR + s] = chord_block[s];
+        }
+    }
+    const std::string poly_path = (fs::path(final_out_dir) / "13_polyphonic_microtonal_cathedral.wav").string();
+    if (aether::WavWriter::write_stereo_wav(poly_path, poly_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << poly_path << "\n";
     }
 
     // Export Standard MIDI File
@@ -441,7 +544,7 @@ void render_all_presets(const std::string& output_dir) {
         trk.events.push_back({240, 0x80, 0, midi_note, 0, {}});
     }
     mf.tracks.push_back(std::move(trk));
-    const std::string midi_out = (fs::path(output_dir) / "fibonacci_score.mid").string();
+    const std::string midi_out = (fs::path(final_out_dir) / "fibonacci_score.mid").string();
     if (mf.save(midi_out)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << midi_out << "\n";
     } else {
@@ -453,29 +556,30 @@ void render_all_presets(const std::string& output_dir) {
     aether::engines::ChladniPlate svg_plate;
     svg_plate.configure(220.0f, 1.2f);
     svg_plate.strike({0.3f, 0.4f}, 1.0f);
-    const std::string chladni_svg_path = (fs::path(output_dir) / "chladni_nodal_lines.svg").string();
+    const std::string chladni_svg_path = (fs::path(final_out_dir) / "chladni_nodal_lines.svg").string();
     if (aether::SvgExporter::export_chladni_svg(svg_plate, chladni_svg_path, 800, 800)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << chladni_svg_path << "\n";
     }
 
     std::cout << "Exporting \033[1mpoincare_tiling.svg\033[0m (Hyperbolic {7,3} Reflection Tessellation)... ";
     auto tiles = aether::math::HyperbolicTiling::generate_tiling(7, 3, 2);
-    const std::string poincare_svg_path = (fs::path(output_dir) / "poincare_tiling.svg").string();
+    const std::string poincare_svg_path = (fs::path(final_out_dir) / "poincare_tiling.svg").string();
     if (aether::SvgExporter::export_poincare_tiling_svg(tiles, poincare_svg_path, 800)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << poincare_svg_path << "\n\n";
     }
 
     // Export Preset Configuration Examples
+    const std::string final_presets_dir = (fs::path(base_dir) / "presets").string();
+    fs::create_directories(final_presets_dir);
     std::cout << "Exporting \033[1m.aether preset configurations\033[0m to presets/... ";
-    fs::create_directories("presets");
     aether::AetherPresetData p_bell{"Cosmic Bell (Poincare)", 0, 0.45f, 0.003f, 1.0f, 220.0f, 1.0f, 0.85f, 0.35f, "Bohlen-Pierce"};
-    aether::PresetManager::save_preset("presets/cosmic_bell.aether", p_bell);
+    aether::PresetManager::save_preset((fs::path(final_presets_dir) / "cosmic_bell.aether").string(), p_bell);
 
     aether::AetherPresetData p_gong{"Tibetan Gong (Kirchhoff-Love)", 1, 0.35f, 0.005f, 0.8f, 110.0f, 2.5f, 0.92f, 0.45f, "Wendy Carlos Beta"};
-    aether::PresetManager::save_preset("presets/tibetan_gong.aether", p_gong);
+    aether::PresetManager::save_preset((fs::path(final_presets_dir) / "tibetan_gong.aether").string(), p_gong);
 
     aether::AetherPresetData p_bowl{"Singing Bowl (Stribeck Friction)", 4, 0.25f, 0.001f, 1.2f, 432.0f, 1.8f, 0.95f, 0.50f, "Slendro"};
-    aether::PresetManager::save_preset("presets/singing_bowl.aether", p_bowl);
+    aether::PresetManager::save_preset((fs::path(final_presets_dir) / "singing_bowl.aether").string(), p_bowl);
     std::cout << "\033[1;32m[DONE]\033[0m\n\n";
 }
 
@@ -649,6 +753,9 @@ int main(int argc, char** argv) {
             std::string wav_file = argv[++i];
             spectrogram_audio_file(wav_file);
             return 0;
+        } else if (arg == "--phase-space" || arg == "--orbit") {
+            run_phase_space_demo();
+            return 0;
         } else if (arg == "--export-svg") {
             std::cout << "\033[1;36m=== Exporting High-Resolution Mathematical Vector Graphics (SVG) ===\033[0m\n";
             fs::create_directories("output");
@@ -671,6 +778,7 @@ int main(int argc, char** argv) {
             std::cout << "  --resynthesize <in.wav> <out.wav> Process and resynthesize WAV file through hyperbolic waveguide\n";
             std::cout << "  --visualize <in.wav>             Render Unicode Braille waveform oscilloscope in terminal\n";
             std::cout << "  --spectrogram <in.wav>           Render 2D Time-Frequency Braille spectrogram in terminal\n";
+            std::cout << "  --phase-space, --orbit           Render 2D symplectic phase space of Henon-Heiles chaos\n";
             std::cout << "  --export-svg                     Export high-resolution Chladni and Poincare SVG vectors\n";
             std::cout << "  --bench                          Run AVX2 SIMD DSP throughput benchmark\n";
             std::cout << "  --render                         Render lossless audio presets & MIDI to output/*\n";

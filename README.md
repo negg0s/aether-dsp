@@ -9,7 +9,7 @@
 [![CLAP](https://img.shields.io/badge/Plugin-CLAP%20Native%20Standard-red)](#)
 [![Audio](https://img.shields.io/badge/Audio-WASAPI%20%7C%20CoreAudio%20%7C%20ALSA%20%7C%20WebAudio-success)](#)
 [![MIDI](https://img.shields.io/badge/MIDI-SMF%20Format%200%2F1-yellow)](#)
-[![Tests](https://img.shields.io/badge/Tests-25%20Invariant%20Tests%20Passed-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/Tests-28%20Invariant%20Tests%20Passed-brightgreen)](#)
 [![Zero-AI](https://img.shields.io/badge/Engine-100%25%20Pure%20Math%20%26%20DSP%20(No%20AI)-orange)](#)
 
 ```
@@ -42,8 +42,12 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
   Acoustic wave propagation inside an axisymmetric surface of constant negative Gaussian curvature $K = -1$. Solves the Webster Horn Equation with tractrix cross-sectional area $S(z) = \pi r^2 \operatorname{sech}^2(u)$, modeling brass acoustic flares and cutoff transmission frequencies without mouth reflections.
 - **4th-Order Symplectic Yoshida Integrator:**
   Phase-space preserving geometric numerical integrator ($O(\Delta t^4)$ global accuracy) with Yoshida sub-step constants ($w_1 = \frac{1}{2 - 2^{1/3}}$), ensuring exact conservation of the shadow Hamiltonian and zero energy drift over millions of samples.
-- **Terminal Unicode Braille 2D Spectrogram & Oscilloscope:**
-  High-resolution sub-pixel graphics engine inside standard terminals using Unicode Braille Patterns (U+2800..U+28FF) for 30 FPS rolling oscilloscopes, dynamic TrueColor stereo VU meters (`--play <wav>`), and 2D Time-Frequency spectral waterfalls (`--spectrogram <wav>`).
+- **Hénon-Heiles Galactic Gravitational Chaos Oscillator:**
+  Models non-integrable stellar orbits in an axisymmetric galactic gravitational potential $V(x,y) = \frac{1}{2}(x^2+y^2) + x^2 y - \frac{1}{3}y^3$. Accurately renders chaotic orbits and Kolmogorov–Arnold–Moser (KAM) invariant tori.
+- **8-Voice Zero-Allocation Polyphonic Voice Manager:**
+  Real-time polyphonic voice allocation with deterministic Least-Recently-Used (LRU) voice stealing, microtonal scale mapping, and soft dynamic headroom normalization for dense chords.
+- **Terminal Unicode Braille Phase Space & 2D Spectrogram:**
+  High-resolution sub-pixel graphics engine inside standard terminals using Unicode Braille Patterns (U+2800..U+28FF) for 30 FPS rolling oscilloscopes, dynamic TrueColor stereo VU meters (`--play <wav>`), 2D Time-Frequency spectral waterfalls (`--spectrogram <wav>`), and 2D symplectic phase space orbits (`--phase-space`).
 - **Stribeck Stick-Slip Non-Linear Friction Exciter:**
   Physically models continuous friction bowing (crystal singing bowls, glass harmonicas) with static/kinetic friction transitions and velocity thresholding.
 - **3D Binaural HRTF Spatializer (Woodworth Spherical Head Model):**
@@ -192,6 +196,8 @@ Drive the Poincaré hyperbolic waveguide with any external audio sample:
 | `09_hyperbolic_geodesic_reverb.wav` | 32-bit Float WAV | Hamiltonian geodesic sound ray-traced convolution reverb |
 | `10_von_karman_turbulent_gong.wav` | 32-bit Float WAV | Large-deflection nonlinear modal coupling with shimmering crescendo |
 | `11_pseudosphere_tractrix_horn.wav` | 32-bit Float WAV | Beltrami Pseudosphere tractrix horn Webster acoustic transmission flare |
+| `12_henon_heiles_galactic_chaos.wav` | 32-bit Float WAV | Astrophysical galactic Hamiltonian chaos integrated with 4th-order Yoshida method |
+| `13_polyphonic_microtonal_cathedral.wav` | 32-bit Float WAV | 8-Voice polyphonic Bohlen-Pierce microtonal chord progression on Chladni resonators |
 | `fibonacci_score.mid` | Standard MIDI Format 1 | Exported polyphonic score ready for DAW import (Ableton/FL Studio) |
 | `chladni_nodal_lines.svg` | Scalable Vector Graphics | 800x800 high-res vector visualization of Chladni nodal plate |
 | `poincare_tiling.svg` | Scalable Vector Graphics | 800x800 high-res vector art of Poincaré {7,3} hyperbolic tessellation |
@@ -211,6 +217,7 @@ aether-dsp/
 │   ├── svg_exporter.hpp           # Vector graphics (.svg) exporter for Chladni curves & tilings
 │   ├── preset_manager.hpp         # Human-readable .aether preset file parser & serializer
 │   ├── engine.hpp                 # Master engine orchestrator, voices & FDN reverb
+│   ├── polyphony.hpp              # 8-Voice zero-allocation polyphonic voice pool & LRU stealing
 │   ├── ui/
 │   │   └── terminal_visualizer.hpp # Unicode Braille sub-pixel waveform & Poincaré disk canvas
 │   ├── audio/
@@ -243,7 +250,8 @@ aether-dsp/
 │       ├── von_karman_plate.hpp     # Nonlinear large-deflection plate with shimmering crescendo
 │       ├── pseudosphere_horn.hpp    # Beltrami pseudosphere tractrix Webster acoustic horn
 │       ├── stick_slip_exciter.hpp   # Stribeck non-linear friction stick-slip continuous exciter
-│       └── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
+│       ├── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
+│       └── hamiltonian_chaos.hpp    # Hénon-Heiles galactic gravitational chaos oscillator
 ├── bindings/
 │   ├── python/                    # Pip-installable Python package (pyproject.toml, setup.py)
 │   └── rust/                      # Complete Rust crate with C-ABI bindings (Cargo.toml)
@@ -252,7 +260,7 @@ aether-dsp/
 │   ├── audio_device.cpp           # Miniaudio hardware backend compilation unit
 │   └── c_api.cpp                  # C-ABI implementation
 ├── tests/
-│   └── unit_tests.cpp             # 25 extended mathematical invariants & audio stability tests
+│   └── unit_tests.cpp             # 28 extended mathematical invariants & audio stability tests
 ├── examples/
 │   ├── python_demo.py             # Python ctypes zero-dependency integration demo
 │   └── spectral_analysis.py       # Pure-Python physical inharmonicity & DFT spectral analyzer
@@ -265,11 +273,6 @@ aether-dsp/
 │   ├── cosmic_bell.aether         # Poincaré disk hyperbolic resonator preset
 │   ├── singing_bowl.aether        # Stribeck stick-slip friction singing bowl preset
 │   └── tibetan_gong.aether        # Kirchhoff-Love thin elastic plate gong preset
-├── web/
-│   ├── index.html                 # Standalone interactive browser GUI & 3D wireframe
-│   └── app.js                     # 3D Canvas visualizer, sand physics & Web Audio synth
-└── CMakeLists.txt
-│   └── build_wasm.sh              # Emscripten WebAssembly build script (Linux/macOS)
 ├── web/
 │   ├── index.html                 # Standalone interactive browser GUI & 3D wireframe
 │   └── app.js                     # 3D Canvas visualizer, sand physics & Web Audio synth

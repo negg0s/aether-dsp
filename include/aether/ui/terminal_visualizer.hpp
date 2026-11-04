@@ -311,6 +311,45 @@ public:
         std::cout << "  t = 0 s" << std::string(char_w > 18 ? char_w - 18 : 2, ' ') << "t = "
                   << std::fixed << std::setprecision(1) << (static_cast<float>(frames.size()) / sample_rate) << " s\n\n";
     }
+
+    /**
+     * @brief Render 2D Phase Space / Poincare Section in High-Resolution Unicode Braille.
+     * @param points Vector of (x, y) coordinates
+     * @param min_x Minimum x boundary
+     * @param max_x Maximum x boundary
+     * @param min_y Minimum y boundary
+     * @param max_y Maximum y boundary
+     * @param char_w Width in character cells
+     * @param char_h Height in character cells
+     * @param title Plot title
+     */
+    static void display_phase_space(const std::vector<std::pair<float, float>>& points,
+                                    float min_x, float max_x, float min_y, float max_y,
+                                    int char_w = 40, int char_h = 16,
+                                    const std::string& title = "Phase Space (q, p)") {
+        BrailleCanvas canvas(char_w, char_h);
+        const int px_w = canvas.pixel_width();
+        const int px_h = canvas.pixel_height();
+
+        const float range_x = (max_x - min_x) > 1e-6f ? (max_x - min_x) : 1.0f;
+        const float range_y = (max_y - min_y) > 1e-6f ? (max_y - min_y) : 1.0f;
+
+        for (const auto& [x, y] : points) {
+            const int px = std::clamp(static_cast<int>(((x - min_x) / range_x) * (px_w - 1)), 0, px_w - 1);
+            const int py = std::clamp(static_cast<int>((px_h - 1) - ((y - min_y) / range_y) * (px_h - 1)), 0, px_h - 1);
+            canvas.set_pixel(px, py, true);
+        }
+
+        std::string border;
+        border.reserve(char_w * 3);
+        for (int i = 0; i < char_w; ++i) border += "\xe2\x94\x80";
+
+        std::cout << "\033[1;36m  " << title << "\033[0m\n";
+        std::cout << "  \xe2\x94\x8c" << border << "\xe2\x94\x90\n";
+        std::cout << canvas.render_ansi("\033[1;32m");
+        std::cout << "  \xe2\x94\x94" << border << "\xe2\x94\x98\n";
+        std::cout << "  x: [" << min_x << ", " << max_x << "]  y: [" << min_y << ", " << max_y << "]\n\n";
+    }
 };
 
 } // namespace aether::ui

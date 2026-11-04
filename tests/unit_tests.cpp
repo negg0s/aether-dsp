@@ -25,6 +25,9 @@
 #include "aether/ui/terminal_visualizer.hpp"
 #include "aether/plugin/clap_entry.hpp"
 #include "aether/c_api.h"
+#include "aether/polyphony.hpp"
+#include "aether/engines/hamiltonian_chaos.hpp"
+#include "aether/engine.hpp"
 #include <iostream>
 #include <cassert>
 #include <cmath>
@@ -495,8 +498,102 @@ void test_braille_spectrogram() {
     std::cout << "PASSED\n";
 }
 
+void test_polyphony_manager() {
+    std::cout << "[TEST] 8-Voice Polyphony Manager & LRU Stealing... ";
+    aether::PolyphonyManager<8> poly(48000);
+    assert(poly.active_voices() == 0);
+
+    // Play 3 notes (C Major triad)
+    poly.note_on(60, 261.63f, 0.8f);
+    poly.note_on(64, 329.63f, 0.75f);
+    poly.note_on(67, 392.00f, 0.70f);
+    assert(poly.active_voices() == 3);
+
+    // Step 200 samples and verify output is active
+    float energy = 0.0f;
+    for (int i = 0; i < 200; ++i) {
+        auto frame = poly.step();
+        energy += std::abs(frame.left) + std::abs(frame.right);
+    }
+    assert(energy > 0.001f);
+
+    // Saturate all 8 voices and force LRU voice stealing
+    for (int note = 70; note <= 78; ++note) {
+        poly.note_on(note, 440.0f + static_cast<float>(note) * 10.0f, 0.6f);
+    }
+    assert(poly.active_voices() == 8);
+
+    // Re-trigger existing note
+    poly.note_on(70, 440.0f + 700.0f, 0.9f);
+    assert(poly.active_voices() == 8);
+
+    poly.all_notes_off();
+    std::cout << "PASSED\n";
+}
+
+void test_henon_heiles_chaos() {
+    std::cout << "[TEST] Henon-Heiles Galactic Hamiltonian Chaos... ";
+    aether::engines::HenonHeilesOscillator henon(0.13, 250.0);
+    const double e0 = henon.compute_energy();
+    assert(std::abs(e0 - 0.13) < 0.015);
+
+    // Step system for 3000 steps with 4th-order Yoshida integrator
+    bool has_non_zero = false;
+    for (int step = 0; step < 3000; ++step) {
+        auto frame = henon.step(48000.0f);
+        assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+        assert(std::abs(frame.left) <= 1.0f && std::abs(frame.right) <= 1.0f);
+        if (std::abs(frame.left) > 0.01f) has_non_zero = true;
+    }
+    assert(has_non_zero);
+
+    // Verify bounded energy conservation (no divergence)
+    const double e_final = henon.compute_energy();
+    assert(!std::isnan(e_final));
+    assert(e_final > 0.0 && e_final < 0.3);
+    std::cout << "PASSED\n";
+}
+
+void test_engine_presets() {
+    std::cout << "[TEST] Master Engine 8-Preset Audio Rendering... ";
+    aether::Engine engine(48000);
+    std::vector<aether::StereoFrame> block(256);
+
+    const aether::Preset presets[] = {
+        aether::Preset::HyperbolicCosmicBell,
+        aether::Preset::ChladniPlateGong,
+        aether::Preset::ChaoticQuantumDrone,
+        aether::Preset::HyperbolicAetherSpace,
+        aether::Preset::BowedCrystalPlate,
+        aether::Preset::VonKarmanTurbulentGong,
+        aether::Preset::PseudosphereTractrixHorn,
+        aether::Preset::HenonHeilesChaos
+    };
+
+    for (auto preset : presets) {
+        engine.load_preset(preset);
+        engine.note_on({0.2f, 0.3f}, 0.8f);
+        engine.process_block(block);
+
+        for (const auto& frame : block) {
+            assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+            assert(!std::isinf(frame.left) && !std::isinf(frame.right));
+            assert(frame.left >= -1.01f && frame.left <= 1.01f);
+            assert(frame.right >= -1.01f && frame.right <= 1.01f);
+        }
+    }
+
+    // Test polyphonic note routing
+    engine.poly_note_on(60, 0.8f);
+    engine.poly_note_on(64, 0.8f);
+    engine.process_block(block);
+    engine.all_notes_off();
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (25 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (28 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -522,6 +619,9 @@ int main() {
     test_pseudosphere_horn();
     test_yoshida_integrator();
     test_braille_spectrogram();
-    std::cout << "\033[1;32mALL 25 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_polyphony_manager();
+    test_henon_heiles_chaos();
+    test_engine_presets();
+    std::cout << "\033[1;32mALL 28 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
