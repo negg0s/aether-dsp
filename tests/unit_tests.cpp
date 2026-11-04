@@ -2,12 +2,16 @@
 #include "aether/ring_buffer.hpp"
 #include "aether/math/poincare.hpp"
 #include "aether/math/runge_kutta.hpp"
+#include "aether/math/hyperbolic_tiling.hpp"
 #include "aether/dsp/biquad.hpp"
 #include "aether/dsp/tuning.hpp"
 #include "aether/dsp/fx/hyperbolic_reverb.hpp"
+#include "aether/dsp/fx/binaural_panner.hpp"
 #include "aether/engines/hyperbolic_waveguide.hpp"
 #include "aether/engines/chladni_plate.hpp"
 #include "aether/midi/midi_file.hpp"
+#include "aether/wav_writer.hpp"
+#include "aether/wav_reader.hpp"
 #include <iostream>
 #include <cassert>
 #include <cmath>
@@ -125,7 +129,6 @@ void test_tuning_system() {
     float root = bp.get_frequency(0, 220.0f);
     assert(std::abs(root - 220.0f) < 1e-3f);
 
-    // 13th step in Bohlen-Pierce is the tritave (3 * root)
     float tritave = bp.get_frequency(13, 220.0f);
     assert(std::abs(tritave - 660.0f) < 1e-1f);
     std::cout << "PASSED\n";
@@ -136,7 +139,6 @@ void test_reverb() {
     aether::dsp::fx::HyperbolicReverb rev;
     rev.configure(0.9f, 0.2f, 0.5f);
 
-    // Impulse
     aether::StereoFrame out = rev.process({1.0f, 1.0f});
     for (int i = 0; i < 5000; ++i) {
         out = rev.process({0.0f, 0.0f});
@@ -172,8 +174,56 @@ void test_midi_serialization() {
     std::cout << "PASSED\n";
 }
 
+void test_binaural_panner() {
+    std::cout << "[TEST] 3D Binaural HRTF Panner... ";
+    aether::dsp::fx::BinauralPanner panner(48000);
+
+    // Right side: azimuth = +90 degrees (right ear leads, left ear delayed)
+    panner.set_position(90.0f, 1.0f);
+    auto stereo = panner.process(1.0f);
+    assert(!std::isnan(stereo.left));
+    assert(!std::isnan(stereo.right));
+
+    // Left side: azimuth = -90 degrees
+    panner.set_position(-90.0f, 1.0f);
+    stereo = panner.process(1.0f);
+    assert(!std::isnan(stereo.left));
+    assert(!std::isnan(stereo.right));
+    std::cout << "PASSED\n";
+}
+
+void test_hyperbolic_tiling() {
+    std::cout << "[TEST] Hyperbolic {7, 3} Tiling Lattice... ";
+    auto tiles = aether::math::HyperbolicTiling::generate_tiling(7, 3, 1);
+    assert(!tiles.empty());
+    assert(tiles[0].vertices.size() == 7);
+    assert(tiles[0].hyperbolic_area > 0.0f);
+    std::cout << "PASSED\n";
+}
+
+void test_wav_roundtrip() {
+    std::cout << "[TEST] Lossless WAV Read/Write Roundtrip... ";
+    std::vector<aether::StereoFrame> test_frames(100);
+    for (size_t i = 0; i < 100; ++i) {
+        test_frames[i] = aether::StereoFrame{0.5f, -0.5f};
+    }
+
+    const std::string tmp_wav = "test_roundtrip.wav";
+    bool ok_write = aether::WavWriter::write_stereo_wav(tmp_wav, test_frames, 48000, true);
+    assert(ok_write);
+
+    auto read_data = aether::WavReader::read_wav(tmp_wav);
+    assert(read_data.valid);
+    assert(read_data.frames.size() == 100);
+    assert(std::abs(read_data.frames[0].left - 0.5f) < 1e-4f);
+    assert(std::abs(read_data.frames[0].right - (-0.5f)) < 1e-4f);
+
+    std::remove(tmp_wav.c_str());
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Extended Unit Test Suite ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (11 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -182,6 +232,9 @@ int main() {
     test_tuning_system();
     test_reverb();
     test_midi_serialization();
-    std::cout << "\033[1;32mALL 8 EXTENDED UNIT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_binaural_panner();
+    test_hyperbolic_tiling();
+    test_wav_roundtrip();
+    std::cout << "\033[1;32mALL 11 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

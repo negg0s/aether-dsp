@@ -1,9 +1,12 @@
 #include "aether/engine.hpp"
 #include "aether/wav_writer.hpp"
+#include "aether/wav_reader.hpp"
 #include "aether/math/algorithmic_composer.hpp"
+#include "aether/math/hyperbolic_tiling.hpp"
 #include "aether/audio/playback_device.hpp"
 #include "aether/midi/midi_file.hpp"
 #include "aether/dsp/tuning.hpp"
+#include "aether/dsp/fx/binaural_panner.hpp"
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -12,6 +15,7 @@
 #include <filesystem>
 #include <cmath>
 #include <thread>
+#include <array>
 
 #if defined(_WIN32)
 #include <conio.h>
@@ -34,7 +38,7 @@ void print_banner() {
 /_/  |_\___/\__/_/ /_/\___/_/     /_____//____/_/       
     )" << "\033[0m\n";
     std::cout << "\033[1;33m[Non-Euclidean Hyperbolic Waveguide & Modal Cymatics Engine (C++20)]\033[0m\n";
-    std::cout << "\033[90mBuilt by Emir (negg0s) | AVX2 SIMD | Live Audio Device | MIDI Engine\033[0m\n\n";
+    std::cout << "\033[90mBuilt by Emir (negg0s) | AVX2 SIMD | 3D Binaural | SMF MIDI | Live TUI\033[0m\n\n";
 }
 
 void print_ascii_cymatics(const aether::engines::ChladniPlate& plate) {
@@ -184,6 +188,40 @@ void render_all_presets(const std::string& output_dir) {
         std::cout << "\033[1;31m[FAILED]\033[0m\n";
     }
 
+    // Render 3D Binaural Orbiting Audio Demo
+    std::cout << "Rendering \033[1m06_binaural_3d_orbit_demo.wav\033[0m (3D Woodworth Spherical Head Model)... ";
+    std::cout.flush();
+    constexpr size_t BINAURAL_SAMPLES = SAMPLE_RATE * 6; // 6 seconds 360 degree orbit
+    std::vector<aether::StereoFrame> binaural_frames(BINAURAL_SAMPLES);
+    aether::Engine bin_engine(SAMPLE_RATE);
+    bin_engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+    aether::dsp::fx::BinauralPanner panner(SAMPLE_RATE);
+
+    std::vector<aether::StereoFrame> bin_block(BLOCK_SIZE);
+    for (size_t i = 0; i < BINAURAL_SAMPLES; i += BLOCK_SIZE) {
+        // Strike bells every 1.2 seconds
+        if (i % (SAMPLE_RATE + SAMPLE_RATE / 5) == 0) {
+            bin_engine.note_on({0.3f, 0.4f}, 0.9f);
+        }
+
+        // Orbit azimuth angle: 0 to 360 degrees
+        const float progress = static_cast<float>(i) / BINAURAL_SAMPLES;
+        const float azimuth = progress * 360.0f - 180.0f; // -180 to +180
+        panner.set_position(azimuth, 1.5f);
+
+        const size_t to_render = std::min(BLOCK_SIZE, BINAURAL_SAMPLES - i);
+        bin_engine.process_block(std::span<aether::StereoFrame>(bin_block.data(), to_render));
+
+        for (size_t s = 0; s < to_render; ++s) {
+            const float mono = (bin_block[s].left + bin_block[s].right) * 0.5f;
+            binaural_frames[i + s] = panner.process(mono);
+        }
+    }
+    const std::string binaural_path = (fs::path(output_dir) / "06_binaural_3d_orbit_demo.wav").string();
+    if (aether::WavWriter::write_stereo_wav(binaural_path, binaural_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << binaural_path << "\n";
+    }
+
     // Export Standard MIDI File
     std::cout << "Exporting \033[1mfibonacci_score.mid\033[0m (Standard MIDI Format 1)... ";
     aether::midi::MidiFile mf;
@@ -203,6 +241,44 @@ void render_all_presets(const std::string& output_dir) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << midi_out << "\n\n";
     } else {
         std::cout << "\033[1;31m[FAILED]\033[0m\n\n";
+    }
+}
+
+void resynthesize_wav(const std::string& input_wav, const std::string& output_wav) {
+    std::cout << "\033[1;36m=== Non-Euclidean Waveguide Audio Resynthesis ===\033[0m\n";
+    std::cout << "Loading input WAV: " << input_wav << "... ";
+    const auto audio = aether::WavReader::read_wav(input_wav);
+    if (!audio.valid) {
+        std::cerr << "\033[1;31m[ERROR] Failed to read audio file.\033[0m\n";
+        return;
+    }
+    std::cout << "[OK] (" << audio.frames.size() << " frames, " << audio.sample_rate << " Hz)\n";
+
+    aether::Engine engine(audio.sample_rate);
+    engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+
+    std::vector<aether::StereoFrame> output_frames(audio.frames.size());
+    std::cout << "Exciting Hyperbolic Waveguide with input audio signal... ";
+    std::cout.flush();
+
+    for (size_t i = 0; i < audio.frames.size(); ++i) {
+        const float mono_input = (audio.frames[i].left + audio.frames[i].right) * 0.5f;
+
+        // Inject continuous excitation into Poincare disk
+        if (std::abs(mono_input) > 0.05f) {
+            const float r = std::clamp(std::abs(mono_input) * 0.5f, 0.05f, 0.75f);
+            engine.waveguide().strike({r, r * 0.5f}, mono_input * 0.8f, 0.1f);
+        }
+
+        std::array<aether::StereoFrame, 1> single{};
+        engine.process_block(single);
+        output_frames[i] = single[0];
+    }
+
+    if (aether::WavWriter::write_stereo_wav(output_wav, output_frames, audio.sample_rate, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << output_wav << "\n";
+    } else {
+        std::cout << "\033[1;31m[FAILED]\033[0m\n";
     }
 }
 
@@ -250,7 +326,6 @@ void run_live_interactive() {
                     std::cout << "\r\033[K[PRESET]: Hyperbolic Aether Space     ";
                     break;
 
-                // Piano keys mapping to Bohlen-Pierce / Microtonal degrees
                 case 'a': case 'A': engine.note_on_degree(0, 0.9f); std::cout << "\r\033[K\033[36m>> Note C3 (Degree 0)\033[0m"; break;
                 case 'w': case 'W': engine.note_on_degree(1, 0.9f); std::cout << "\r\033[K\033[36m>> Note C#3 (Degree 1)\033[0m"; break;
                 case 's': case 'S': engine.note_on_degree(2, 0.9f); std::cout << "\r\033[K\033[36m>> Note D3 (Degree 2)\033[0m"; break;
@@ -294,12 +369,18 @@ int main(int argc, char** argv) {
             do_bench = false;
             do_render = false;
             do_ascii = false;
+        } else if (arg == "--resynthesize" && i + 2 < argc) {
+            std::string in_file = argv[++i];
+            std::string out_file = argv[++i];
+            resynthesize_wav(in_file, out_file);
+            return 0;
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: aether-dsp [options]\n";
-            std::cout << "  --live, -l       Launch live interactive synthesizer with audio hardware\n";
-            std::cout << "  --bench          Run AVX2 SIMD DSP throughput benchmark\n";
-            std::cout << "  --render         Render lossless audio presets & MIDI to output/*\n";
-            std::cout << "  --ascii          Display terminal ASCII Chladni nodal plate\n";
+            std::cout << "  --live, -l                       Launch live interactive synthesizer with audio hardware\n";
+            std::cout << "  --resynthesize <in.wav> <out.wav> Process and resynthesize WAV file through hyperbolic waveguide\n";
+            std::cout << "  --bench                          Run AVX2 SIMD DSP throughput benchmark\n";
+            std::cout << "  --render                         Render lossless audio presets & MIDI to output/*\n";
+            std::cout << "  --ascii                          Display terminal ASCII Chladni nodal plate\n";
             return 0;
         }
     }
