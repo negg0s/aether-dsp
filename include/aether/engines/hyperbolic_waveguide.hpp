@@ -7,6 +7,13 @@
 #include <cmath>
 #include <algorithm>
 
+#if defined(__AVX2__) || defined(_M_AMD64)
+#include <immintrin.h>
+#define AETHER_HAS_AVX2 1
+#else
+#define AETHER_HAS_AVX2 0
+#endif
+
 namespace aether::engines {
 
 /**
@@ -19,8 +26,7 @@ namespace aether::engines {
  * Euclidean Laplacian by the inverse conformal factor squared:
  *    Delta_H u = ((1 - r^2)^2 / 4) * (d^2 u / dx^2 + d^2 u / dy^2)
  *
- * Geodesics diverge exponentially, producing a shimmering non-harmonic acoustic dispersion
- * that cannot exist in standard 3D Euclidean rooms or plates.
+ * Fully accelerated with AVX2 SIMD vectorized 8-wide fused multiply-add kernels.
  */
 class HyperbolicWaveguide {
 public:
@@ -40,7 +46,7 @@ public:
 
     /**
      * @brief Configure waveguide physical parameters.
-     * @param wave_speed Normalized wave speed c (0.1 to 0.7 for Courant stability)
+     * @param wave_speed Normalized wave speed c (0.1 to 0.65 for Courant stability)
      * @param damping Wave absorption damping coefficient gamma
      * @param curvature_scale Non-Euclidean curvature scale factor
      */
@@ -52,14 +58,10 @@ public:
 
     /**
      * @brief Strike the hyperbolic space at a specific point inside the Poincare disk.
-     * @param strike_pos Point in unit disk (|pos| < 1.0)
-     * @param velocity Impact force (0.0 to 1.0)
-     * @param radius Dispersion footprint
      */
     void strike(Vec2 strike_pos, float velocity = 0.8f, float radius = 0.12f) noexcept {
         const float r_sq = strike_pos.magnitude_squared();
         if (r_sq >= 0.95f) {
-            // Project inside if outside
             strike_pos = strike_pos * (0.90f / std::sqrt(r_sq));
         }
 
@@ -89,37 +91,77 @@ public:
         const float inv_denom = 1.0f / (1.0f + half_damp);
         const float prev_factor = (1.0f - half_damp);
 
-        // Compute FDTD step across hyperbolic Riemannian manifold
+#if AETHER_HAS_AVX2
+        // AVX2 8-wide Vectorized Hyperbolic FDTD Kernel
+        const __m256 v_c2 = _mm256_set1_ps(c2);
+        const __m256 v_curv = _mm256_set1_ps(curvature_scale_);
+        const __m256 v_four = _mm256_set1_ps(4.0f);
+        const __m256 v_two = _mm256_set1_ps(2.0f);
+        const __m256 v_prev_fac = _mm256_set1_ps(prev_factor);
+        const __m256 v_inv_denom = _mm256_set1_ps(inv_denom);
+
+        for (size_t y = 1; y < GRID_DIM - 1; ++y) {
+            const size_t row_offset = y * GRID_DIM;
+
+            for (size_t x = 1; x < GRID_DIM - 1; x += 8) {
+                const size_t idx = row_offset + x;
+
+                // Load 8 contiguous cells
+                const __m256 u_c = _mm256_loadu_ps(&u_curr_[idx]);
+                const __m256 u_l = _mm256_loadu_ps(&u_curr_[idx - 1]);
+                const __m256 u_r = _mm256_loadu_ps(&u_curr_[idx + 1]);
+                const __m256 u_d = _mm256_loadu_ps(&u_curr_[idx - GRID_DIM]);
+                const __m256 u_u = _mm256_loadu_ps(&u_curr_[idx + GRID_DIM]);
+
+                // Euclidean Laplacian: (L + R + D + U) - 4 * C
+                const __m256 lap_sum = _mm256_add_ps(_mm256_add_ps(u_l, u_r), _mm256_add_ps(u_d, u_u));
+                const __m256 lap_e = _mm256_sub_ps(lap_sum, _mm256_mul_ps(v_four, u_c));
+
+                // Scale by Poincare Laplace-Beltrami factor: lap_h = lap_e * lb * curv
+                const __m256 lb = _mm256_loadu_ps(&laplace_beltrami_factors_[idx]);
+                const __m256 lap_h = _mm256_mul_ps(_mm256_mul_ps(lap_e, lb), v_curv);
+
+                // Wave update: (2 * u_c - prev_factor * u_p + c^2 * lap_h) * inv_denom
+                const __m256 u_p = _mm256_loadu_ps(&u_prev_[idx]);
+                __m256 term = _mm256_fmadd_ps(v_two, u_c, _mm256_mul_ps(v_c2, lap_h));
+                term = _mm256_sub_ps(term, _mm256_mul_ps(v_prev_fac, u_p));
+                __m256 u_new = _mm256_mul_ps(term, v_inv_denom);
+
+                // Boundary absorption dampening
+                const __m256 pml = _mm256_loadu_ps(&boundary_absorption_[idx]);
+                u_new = _mm256_mul_ps(u_new, pml);
+
+                _mm256_storeu_ps(&u_next_[idx], u_new);
+            }
+        }
+#else
+        // Fallback scalar kernel
         for (size_t y = 1; y < GRID_DIM - 1; ++y) {
             for (size_t x = 1; x < GRID_DIM - 1; ++x) {
                 const size_t idx = y * GRID_DIM + x;
                 if (!is_inside_disk_[idx]) continue;
 
-                // 5-point discrete Euclidean Laplacian
                 const float u_c = u_curr_[idx];
                 const float laplacian_e = u_curr_[idx + 1] + u_curr_[idx - 1] +
                                           u_curr_[idx + GRID_DIM] + u_curr_[idx - GRID_DIM] -
                                           4.0f * u_c;
 
-                // Scale by Poincare Laplace-Beltrami conformal metric factor
                 const float lb_metric = laplace_beltrami_factors_[idx];
                 const float laplacian_h = laplacian_e * lb_metric * curvature_scale_;
 
-                // Non-linear hyperbolic wave equation update
                 float u_new = inv_denom * (2.0f * u_c - prev_factor * u_prev_[idx] + c2 * laplacian_h);
-
-                // Boundary absorption damping near horocycle rim
                 u_new *= boundary_absorption_[idx];
 
                 u_next_[idx] = u_new;
             }
         }
+#endif
 
-        // Cycle buffers (pointer swaps in std::array)
+        // Buffer cycle
         std::swap(u_prev_, u_curr_);
         std::swap(u_curr_, u_next_);
 
-        // Interpolate stereo pickup readout
+        // Readout pickups
         const Sample left = sample_at(pickup_left);
         const Sample right = sample_at(pickup_right);
 
@@ -127,10 +169,9 @@ public:
     }
 
     /**
-     * @brief Direct bilinear sampling at arbitrary continuous coordinate inside the disk.
+     * @brief Bilinear sampling at continuous coordinate inside the disk.
      */
     [[nodiscard]] Sample sample_at(Vec2 pos) const noexcept {
-        // Map from [-1.0, 1.0] to [0, GRID_DIM - 1]
         const float gx = (pos.x * 0.5f + 0.5f) * static_cast<float>(GRID_DIM - 1);
         const float gy = (pos.y * 0.5f + 0.5f) * static_cast<float>(GRID_DIM - 1);
 
@@ -155,14 +196,6 @@ public:
 
     [[nodiscard]] const std::array<float, NUM_CELLS>& state() const noexcept {
         return u_curr_;
-    }
-
-    [[nodiscard]] const std::array<Vec2, NUM_CELLS>& cell_coords() const noexcept {
-        return cell_coords_;
-    }
-
-    [[nodiscard]] const std::array<bool, NUM_CELLS>& inside_disk_mask() const noexcept {
-        return is_inside_disk_;
     }
 
 private:
@@ -196,7 +229,6 @@ private:
                     is_inside_disk_[idx] = true;
                     laplace_beltrami_factors_[idx] = math::PoincareDisk::laplace_beltrami_factor(pos);
 
-                    // Perfectly matched layer (PML) absorption factor near disk boundary
                     if (r > 0.82f) {
                         const float ramp = (r - 0.82f) / (math::PoincareDisk::BOUNDARY_RADIUS - 0.82f);
                         boundary_absorption_[idx] = 1.0f - 0.08f * ramp * ramp;

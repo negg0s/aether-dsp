@@ -1,11 +1,13 @@
 #include "aether/engine.hpp"
 #include "aether/wav_writer.hpp"
+#include "aether/math/algorithmic_composer.hpp"
 #include <iostream>
 #include <chrono>
 #include <vector>
 #include <string>
 #include <iomanip>
 #include <filesystem>
+#include <cmath>
 
 namespace fs = std::filesystem;
 
@@ -19,7 +21,7 @@ void print_banner() {
 /_/  |_\___/\__/_/ /_/\___/_/     /_____//____/_/       
     )" << "\033[0m\n";
     std::cout << "\033[1;33m[Non-Euclidean Hyperbolic Waveguide & Modal Cymatics Engine (C++20)]\033[0m\n";
-    std::cout << "\033[90mBuilt by Emir (negg0s) | Zero-OS-lock-in | Zero-Allocation Real-Time Core\033[0m\n\n";
+    std::cout << "\033[90mBuilt by Emir (negg0s) | Zero-OS-lock-in | AVX2 SIMD Accelerated\033[0m\n\n";
 }
 
 void print_ascii_cymatics(const aether::engines::ChladniPlate& plate) {
@@ -61,10 +63,10 @@ void print_ascii_cymatics(const aether::engines::ChladniPlate& plate) {
 }
 
 void run_benchmark() {
-    std::cout << "\033[1;32m=== Starting High-Precision DSP Performance Benchmark ===\033[0m\n";
+    std::cout << "\033[1;32m=== Starting High-Precision AVX2 SIMD DSP Performance Benchmark ===\033[0m\n";
     constexpr uint32_t SAMPLE_RATE = 48000;
     constexpr size_t BLOCK_SIZE = 64;
-    constexpr size_t TOTAL_SAMPLES = SAMPLE_RATE * 2; // 2 seconds of high-precision audio
+    constexpr size_t TOTAL_SAMPLES = SAMPLE_RATE * 3; // 3 seconds of high-precision audio
     constexpr size_t TOTAL_BLOCKS = TOTAL_SAMPLES / BLOCK_SIZE;
 
     aether::Engine engine(SAMPLE_RATE);
@@ -95,7 +97,7 @@ void run_benchmark() {
 
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "\n\033[1m[Benchmark Results]:\033[0m\n";
-    std::cout << "  * Total Audio Simulated   : 2.00 seconds (" << TOTAL_SAMPLES << " stereo samples)\n";
+    std::cout << "  * Total Audio Simulated   : 3.00 seconds (" << TOTAL_SAMPLES << " stereo samples)\n";
     std::cout << "  * Execution Wall Time     : " << elapsed_sec * 1000.0 << " ms\n";
     std::cout << "  * Processing Speed        : \033[1;32m" << samples_per_sec / 1e6 << " M samples/sec\033[0m\n";
     std::cout << "  * Real-Time Multiplier    : \033[1;32m" << realtime_factor << "x real-time\033[0m\n";
@@ -156,7 +158,21 @@ void render_all_presets(const std::string& output_dir) {
             std::cout << "\033[1;31m[FAILED]\033[0m\n";
         }
     }
-    std::cout << "\n";
+
+    // Render Algorithmic Composition
+    std::cout << "Rendering \033[1m05_fibonacci_non_euclidean_sonata.wav\033[0m (Algorithmic Xenakis/Fibonacci Series)... ";
+    std::cout.flush();
+    constexpr double SONATA_DURATION = 8.0;
+    const auto score = aether::math::AlgorithmicComposer::generate_fibonacci_score(SONATA_DURATION);
+    const auto sonata_frames = aether::math::AlgorithmicComposer::render_score(score, SONATA_DURATION, SAMPLE_RATE);
+
+    const std::string sonata_path = (fs::path(output_dir) / "05_fibonacci_non_euclidean_sonata.wav").string();
+    const bool sonata_ok = aether::WavWriter::write_stereo_wav(sonata_path, sonata_frames, SAMPLE_RATE, true);
+    if (sonata_ok) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << sonata_path << "\n\n";
+    } else {
+        std::cout << "\033[1;31m[FAILED]\033[0m\n\n";
+    }
 }
 
 int main(int argc, char** argv) {
@@ -170,7 +186,7 @@ int main(int argc, char** argv) {
         std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: aether-dsp [options]\n";
-            std::cout << "  --bench          Run nanosecond resolution DSP throughput benchmark\n";
+            std::cout << "  --bench          Run AVX2 SIMD DSP throughput benchmark\n";
             std::cout << "  --render         Render lossless audio presets to output/*.wav\n";
             std::cout << "  --ascii          Display terminal ASCII Chladni nodal plate\n";
             return 0;
