@@ -560,7 +560,7 @@ void test_henon_heiles_chaos() {
 }
 
 void test_engine_presets() {
-    std::cout << "[TEST] Master Engine 11-Preset Complete Audio Rendering... ";
+    std::cout << "[TEST] Master Engine 14-Preset Complete Audio Rendering... ";
     aether::Engine engine(48000);
     std::vector<aether::StereoFrame> block(256);
 
@@ -575,7 +575,10 @@ void test_engine_presets() {
         aether::Preset::HenonHeilesChaos,
         aether::Preset::HyperbolicStringJawari,
         aether::Preset::SineGordonBreather,
-        aether::Preset::AcousticBlackHole
+        aether::Preset::AcousticBlackHole,
+        aether::Preset::AcousticWormhole,
+        aether::Preset::TopologicalMetamaterial,
+        aether::Preset::KdvSolitonLattice
     };
 
     for (auto preset : presets) {
@@ -799,8 +802,71 @@ void test_acoustic_black_hole() {
     std::cout << "PASSED\n";
 }
 
+void test_acoustic_wormhole() {
+    std::cout << "[TEST] Relativistic Acoustic Wormhole & Quasinormal Ringing... ";
+    aether::engines::AcousticWormhole wormhole(48000);
+    wormhole.configure(0.35f, 1.4f, 0.42f, 0.0006f);
+
+    wormhole.strike_universe_a(0.65f, 0.95f);
+    assert(wormhole.total_energy() > 0.0f);
+
+    bool b_received = false;
+    for (int i = 0; i < 1200; ++i) {
+        auto frame = wormhole.process();
+        assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+        assert(!std::isinf(frame.left) && !std::isinf(frame.right));
+        if (std::abs(frame.right) > 0.005f) {
+            b_received = true; // Confirms flux tunneling across the throat into Universe B
+        }
+    }
+    assert(b_received);
+    std::cout << "PASSED\n";
+}
+
+void test_topological_metamaterial() {
+    std::cout << "[TEST] Topological Dirac Metamaterial & Chiral Edge States... ";
+    aether::engines::TopologicalMetamaterial topo(48000);
+    topo.configure(0.45f, 0.38f, 0.0005f);
+
+    topo.strike_edge(0.95f);
+    assert(topo.total_energy() > 0.0f);
+
+    bool edge_signal = false;
+    for (int i = 0; i < 1000; ++i) {
+        auto frame = topo.process();
+        assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+        assert(!std::isinf(frame.left) && !std::isinf(frame.right));
+        if (std::abs(frame.left) > 0.005f) {
+            edge_signal = true; // Confirms edge mode transport along domain wall
+        }
+    }
+    assert(edge_signal);
+    std::cout << "PASSED\n";
+}
+
+void test_kdv_soliton_lattice() {
+    std::cout << "[TEST] Toda / KdV Completely Integrable Soliton Lattice... ";
+    aether::engines::KdvSolitonLattice toda(48000);
+    toda.configure(1.8f, 340.0f, 0.0004f);
+
+    toda.inject_soliton(0.2f, 1.2f);
+    assert(toda.total_energy() > 0.0f);
+
+    bool strain_observed = false;
+    for (int i = 0; i < 1000; ++i) {
+        auto frame = toda.process();
+        assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+        assert(!std::isinf(frame.left) && !std::isinf(frame.right));
+        if (std::abs(frame.left) > 0.01f || std::abs(frame.right) > 0.01f) {
+            strain_observed = true;
+        }
+    }
+    assert(strain_observed);
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (35 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (38 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -835,7 +901,10 @@ int main() {
     test_bolza_surface_fuchsian_group();
     test_sine_gordon_breather();
     test_acoustic_black_hole();
+    test_acoustic_wormhole();
+    test_topological_metamaterial();
+    test_kdv_soliton_lattice();
     test_engine_presets();
-    std::cout << "\033[1;32mALL 35 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    std::cout << "\033[1;32mALL 38 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

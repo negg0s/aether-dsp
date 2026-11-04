@@ -56,6 +56,15 @@ AETHER_API void aether_engine_load_preset(aether_engine_handle_t handle, int pre
         case AETHER_PRESET_ACOUSTIC_BLACK_HOLE:
             engine->load_preset(aether::Preset::AcousticBlackHole);
             break;
+        case AETHER_PRESET_ACOUSTIC_WORMHOLE:
+            engine->load_preset(aether::Preset::AcousticWormhole);
+            break;
+        case AETHER_PRESET_TOPOLOGICAL_METAMATERIAL:
+            engine->load_preset(aether::Preset::TopologicalMetamaterial);
+            break;
+        case AETHER_PRESET_KDV_SOLITON_LATTICE:
+            engine->load_preset(aether::Preset::KdvSolitonLattice);
+            break;
         default:
             engine->load_preset(aether::Preset::HyperbolicCosmicBell);
             break;

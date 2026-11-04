@@ -1,0 +1,12 @@
+# AetherDSP Preset Configuration File
+version = 1.0
+name = Toda Soliton Lattice
+preset_id = 13
+wave_speed = 0.45
+damping = 0.0004
+curvature_scale = 1.8
+plate_fundamental = 340
+plate_stiffness = 1
+reverb_decay = 0.85
+reverb_mix = 0.3
+tuning_scale = Fibonacci Golden Ratio

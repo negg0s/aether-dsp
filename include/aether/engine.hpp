@@ -17,6 +17,9 @@
 #include "engines/hyperbolic_string.hpp"
 #include "engines/sine_gordon_breather.hpp"
 #include "engines/acoustic_black_hole.hpp"
+#include "engines/acoustic_wormhole.hpp"
+#include "engines/topological_metamaterial.hpp"
+#include "engines/kdv_soliton_lattice.hpp"
 #include "dsp/fx/hyperbolic_spatializer_3d.hpp"
 #include "polyphony.hpp"
 #include <span>
@@ -36,7 +39,10 @@ enum class Preset {
     HenonHeilesChaos,        // Galactic axisymmetric gravitational Hamiltonian chaos with 4th-order Yoshida integration
     HyperbolicStringJawari,  // Nonlinear stiff Kirchhoff string with tension modulation & buzzing jawari obstacle
     SineGordonBreather,      // Integrable relativistic topological soliton & pulsating breather field
-    AcousticBlackHole        // Retarding acoustic metamaterial waveguide with Unruh sonic horizon & Hawking radiation
+    AcousticBlackHole,       // Retarding acoustic metamaterial waveguide with Unruh sonic horizon & Hawking radiation
+    AcousticWormhole,        // Multi-manifold Morris-Thorne throat coupling & quasinormal resonance
+    TopologicalMetamaterial, // Valley-Hall phononic crystal with backscattering-immune Dirac edge states
+    KdvSolitonLattice        // Toda completely integrable lattice with non-thermalizing solitary shocks
 };
 
 /**
@@ -56,7 +62,10 @@ public:
           string_(sample_rate),
           spatializer3d_(sample_rate),
           sine_gordon_(sample_rate),
-          acoustic_bh_(sample_rate) {
+          acoustic_bh_(sample_rate),
+          wormhole_(sample_rate),
+          topological_(sample_rate),
+          soliton_lattice_(sample_rate) {
         init();
     }
 
@@ -154,6 +163,30 @@ public:
                 filter_r_.configure(dsp::FilterType::Lowpass, 16000.0f, 0.707f, static_cast<float>(sample_rate_));
                 reverb_.configure(0.88f, 0.25f, 0.32f);
                 break;
+
+            case Preset::AcousticWormhole:
+                wormhole_.reset();
+                wormhole_.configure(0.35f, 1.4f, 0.42f, 0.0006f);
+                filter_l_.configure(dsp::FilterType::Lowpass, 14000.0f, 0.707f, static_cast<float>(sample_rate_));
+                filter_r_.configure(dsp::FilterType::Lowpass, 14000.0f, 0.707f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.86f, 0.24f, 0.30f);
+                break;
+
+            case Preset::TopologicalMetamaterial:
+                topological_.reset();
+                topological_.configure(0.45f, 0.38f, 0.0005f);
+                filter_l_.configure(dsp::FilterType::Lowpass, 15000.0f, 0.707f, static_cast<float>(sample_rate_));
+                filter_r_.configure(dsp::FilterType::Lowpass, 15000.0f, 0.707f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.82f, 0.20f, 0.28f);
+                break;
+
+            case Preset::KdvSolitonLattice:
+                soliton_lattice_.reset();
+                soliton_lattice_.configure(1.8f, 340.0f, 0.0004f);
+                filter_l_.configure(dsp::FilterType::Lowpass, 16000.0f, 0.707f, static_cast<float>(sample_rate_));
+                filter_r_.configure(dsp::FilterType::Lowpass, 16000.0f, 0.707f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.85f, 0.22f, 0.30f);
+                break;
         }
     }
 
@@ -195,6 +228,18 @@ public:
         if (current_preset_ == Preset::AcousticBlackHole) {
             acoustic_bh_.strike(strike_coord.x * 0.4f + 0.5f, velocity);
         }
+
+        if (current_preset_ == Preset::AcousticWormhole) {
+            wormhole_.strike_universe_a(strike_coord.x * 0.4f + 0.4f, velocity);
+        }
+
+        if (current_preset_ == Preset::TopologicalMetamaterial) {
+            topological_.strike_edge(velocity);
+        }
+
+        if (current_preset_ == Preset::KdvSolitonLattice) {
+            soliton_lattice_.strike(strike_coord.x * 0.4f + 0.3f, velocity);
+        }
     }
 
     /**
@@ -211,6 +256,8 @@ public:
         } else if (current_preset_ == Preset::SineGordonBreather) {
             sine_gordon_.configure(0.42f, freq, 0.0006f);
             sine_gordon_.inject_breather(0.5f, 0.72f, 1.0f);
+        } else if (current_preset_ == Preset::KdvSolitonLattice) {
+            soliton_lattice_.configure(1.8f, freq * 1.5f, 0.0004f);
         }
         note_on(strike_coord, velocity);
     }
@@ -315,6 +362,21 @@ public:
                     sample = acoustic_bh_.process();
                     break;
                 }
+
+                case Preset::AcousticWormhole: {
+                    sample = wormhole_.process();
+                    break;
+                }
+
+                case Preset::TopologicalMetamaterial: {
+                    sample = topological_.process();
+                    break;
+                }
+
+                case Preset::KdvSolitonLattice: {
+                    sample = soliton_lattice_.process();
+                    break;
+                }
             }
 
             // Mix in active polyphonic chord voices if any
@@ -348,6 +410,9 @@ public:
     [[nodiscard]] engines::HyperbolicString& string() noexcept { return string_; }
     [[nodiscard]] engines::SineGordonBreather& sine_gordon() noexcept { return sine_gordon_; }
     [[nodiscard]] engines::AcousticBlackHole& acoustic_bh() noexcept { return acoustic_bh_; }
+    [[nodiscard]] engines::AcousticWormhole& wormhole() noexcept { return wormhole_; }
+    [[nodiscard]] engines::TopologicalMetamaterial& topological() noexcept { return topological_; }
+    [[nodiscard]] engines::KdvSolitonLattice& soliton_lattice() noexcept { return soliton_lattice_; }
     [[nodiscard]] dsp::fx::HyperbolicSpatializer3D& spatializer3d() noexcept { return spatializer3d_; }
     [[nodiscard]] PolyphonyManager<8>& polyphony() noexcept { return polyphony_; }
     [[nodiscard]] dsp::TuningSystem& tuning() noexcept { return tuning_; }
@@ -368,6 +433,9 @@ private:
     engines::HyperbolicString string_;
     engines::SineGordonBreather sine_gordon_;
     engines::AcousticBlackHole acoustic_bh_;
+    engines::AcousticWormhole wormhole_;
+    engines::TopologicalMetamaterial topological_;
+    engines::KdvSolitonLattice soliton_lattice_;
     dsp::fx::HyperbolicSpatializer3D spatializer3d_;
     PolyphonyManager<8> polyphony_;
 

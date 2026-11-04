@@ -730,6 +730,66 @@ void render_all_presets(const std::string& output_dir) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << abh_path << "\n";
     }
 
+    // Render 20: Relativistic Morris-Thorne Multi-Manifold Acoustic Wormhole
+    std::cout << "Rendering \033[1m20_morris_thorne_acoustic_wormhole.wav\033[0m (Throat Coupling & QNM Ringing)... ";
+    std::cout.flush();
+    aether::engines::AcousticWormhole wormhole(SAMPLE_RATE);
+    wormhole.configure(0.35f, 1.4f, 0.42f, 0.0006f);
+    wormhole.strike_universe_a(0.68f, 0.95f);
+
+    constexpr size_t WORMHOLE_SAMPLES = SAMPLE_RATE * 4;
+    std::vector<aether::StereoFrame> wormhole_frames(WORMHOLE_SAMPLES);
+    for (size_t s = 0; s < WORMHOLE_SAMPLES; ++s) {
+        if (s == static_cast<size_t>(SAMPLE_RATE * 1.5)) {
+            wormhole.strike_universe_b(0.60f, 0.85f);
+        }
+        wormhole_frames[s] = wormhole.process();
+    }
+    const std::string wormhole_path = (fs::path(final_out_dir) / "20_morris_thorne_acoustic_wormhole.wav").string();
+    if (aether::WavWriter::write_stereo_wav(wormhole_path, wormhole_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << wormhole_path << "\n";
+    }
+
+    // Render 21: Topological Phononic Metamaterial & Chiral Dirac Edge States
+    std::cout << "Rendering \033[1m21_topological_dirac_metamaterial.wav\033[0m (Valley-Hall Backscattering Immunity)... ";
+    std::cout.flush();
+    aether::engines::TopologicalMetamaterial topo(SAMPLE_RATE);
+    topo.configure(0.48f, 0.38f, 0.0005f);
+    topo.strike_edge(0.95f);
+
+    constexpr size_t TOPO_SAMPLES = static_cast<size_t>(SAMPLE_RATE * 3.5);
+    std::vector<aether::StereoFrame> topo_frames(TOPO_SAMPLES);
+    for (size_t s = 0; s < TOPO_SAMPLES; ++s) {
+        if (s == SAMPLE_RATE * 1 || s == static_cast<size_t>(SAMPLE_RATE * 2.2)) {
+            topo.strike_edge(0.85f);
+        }
+        topo_frames[s] = topo.process();
+    }
+    const std::string topo_path = (fs::path(final_out_dir) / "21_topological_dirac_metamaterial.wav").string();
+    if (aether::WavWriter::write_stereo_wav(topo_path, topo_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << topo_path << "\n";
+    }
+
+    // Render 22: Toda / KdV Completely Integrable Soliton Lattice & FPUT Recurrence
+    std::cout << "Rendering \033[1m22_toda_kdv_integrable_soliton_lattice.wav\033[0m (Non-Thermalizing Solitary Shocks)... ";
+    std::cout.flush();
+    aether::engines::KdvSolitonLattice toda(SAMPLE_RATE);
+    toda.configure(1.8f, 340.0f, 0.0004f);
+    toda.inject_soliton(0.2f, 1.3f);
+
+    constexpr size_t TODA_SAMPLES = SAMPLE_RATE * 4;
+    std::vector<aether::StereoFrame> toda_frames(TODA_SAMPLES);
+    for (size_t s = 0; s < TODA_SAMPLES; ++s) {
+        if (s == SAMPLE_RATE * 1 || s == static_cast<size_t>(SAMPLE_RATE * 2.5)) {
+            toda.strike(0.25f, 0.9f, 0.06f);
+        }
+        toda_frames[s] = toda.process();
+    }
+    const std::string toda_path = (fs::path(final_out_dir) / "22_toda_kdv_integrable_soliton_lattice.wav").string();
+    if (aether::WavWriter::write_stereo_wav(toda_path, toda_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << toda_path << "\n";
+    }
+
     // Export Standard MIDI File
     std::cout << "Exporting \033[1mfibonacci_score.mid\033[0m (Standard MIDI Format 1)... ";
     aether::midi::MidiFile mf;
@@ -786,6 +846,15 @@ void render_all_presets(const std::string& output_dir) {
 
     aether::AetherPresetData p_black_hole{"Acoustic Black Hole", 10, 0.45f, 0.008f, 2.2f, 180.0f, 1.0f, 0.88f, 0.35f, "12-EDO"};
     aether::PresetManager::save_preset((fs::path(final_presets_dir) / "acoustic_black_hole.aether").string(), p_black_hole);
+
+    aether::AetherPresetData p_wormhole{"Acoustic Wormhole", 11, 0.42f, 0.0006f, 1.4f, 220.0f, 1.0f, 0.86f, 0.30f, "Wendy Carlos Alpha"};
+    aether::PresetManager::save_preset((fs::path(final_presets_dir) / "acoustic_wormhole.aether").string(), p_wormhole);
+
+    aether::AetherPresetData p_topo{"Topological Metamaterial", 12, 0.38f, 0.0005f, 1.0f, 440.0f, 1.0f, 0.82f, 0.28f, "Slendro"};
+    aether::PresetManager::save_preset((fs::path(final_presets_dir) / "topological_metamaterial.aether").string(), p_topo);
+
+    aether::AetherPresetData p_toda{"Toda Soliton Lattice", 13, 0.45f, 0.0004f, 1.8f, 340.0f, 1.0f, 0.85f, 0.30f, "Fibonacci Golden Ratio"};
+    aether::PresetManager::save_preset((fs::path(final_presets_dir) / "toda_soliton_lattice.aether").string(), p_toda);
     std::cout << "\033[1;32m[DONE]\033[0m\n\n";
 }
 
@@ -843,7 +912,7 @@ void run_live_interactive() {
     std::cout << "\033[1;36m[LIVE SYNTHESIZER READY]\033[0m Audio streaming active at 48kHz stereo.\n";
     std::cout << "Controls:\n";
     std::cout << "  Notes      : \033[1m[A] [W] [S] [E] [D] [F] [T] [G] [Y] [H] [U] [J] [K]\033[0m\n";
-    std::cout << "  Presets    : \033[1m[1] Bell  [2] Gong  [3] Drone  [4] Aether  [5] Bowed  [6] VK-Plate  [7] Horn  [8] Chaos  [9] Jawari  [0] Breather  [-] BlackHole\033[0m\n";
+    std::cout << "  Presets    : \033[1m[1] Bell  [2] Gong  [3] Drone  [4] Aether  [5] Bowed  [6] VK-Plate  [7] Horn  [8] Chaos  [9] Jawari  [0] Breather  [-] BlackHole  [=] Wormhole  [P] Metamaterial  [L] Toda Soliton\033[0m\n";
     std::cout << "  Tuning     : \033[1m[ [ ] Previous Scale    [ ] ] Next Scale\033[0m\n";
     std::cout << "  Quit       : \033[1;31m[Q] or [ESC]\033[0m\n\n";
 
@@ -901,6 +970,18 @@ void run_live_interactive() {
                 case '-':
                     engine.load_preset(aether::Preset::AcousticBlackHole);
                     current_preset_name = "Acoustic Black Hole";
+                    break;
+                case '=':
+                    engine.load_preset(aether::Preset::AcousticWormhole);
+                    current_preset_name = "Acoustic Wormhole";
+                    break;
+                case 'p': case 'P':
+                    engine.load_preset(aether::Preset::TopologicalMetamaterial);
+                    current_preset_name = "Topological Metamaterial";
+                    break;
+                case 'l': case 'L':
+                    engine.load_preset(aether::Preset::KdvSolitonLattice);
+                    current_preset_name = "Toda Soliton Lattice";
                     break;
 
                 // Scale cycling

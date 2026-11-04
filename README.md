@@ -9,7 +9,7 @@
 [![CLAP](https://img.shields.io/badge/Plugin-CLAP%20Native%20Standard-red)](#)
 [![Audio](https://img.shields.io/badge/Audio-WASAPI%20%7C%20CoreAudio%20%7C%20ALSA%20%7C%20WebAudio-success)](#)
 [![MIDI](https://img.shields.io/badge/MIDI-SMF%20Format%200%2F1-yellow)](#)
-[![Tests](https://img.shields.io/badge/Tests-35%20Invariant%20Tests%20Passed-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/Tests-38%20Invariant%20Tests%20Passed-brightgreen)](#)
 [![Zero-AI](https://img.shields.io/badge/Engine-100%25%20Pure%20Math%20%26%20DSP%20(No%20AI)-orange)](#)
 
 ```
@@ -44,6 +44,12 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
   Simulates the 1+1D nonlinear relativistic field equation $\partial_{tt}\phi - c^2 \partial_{xx}\phi + \omega_0^2 \sin\phi + \gamma \partial_t\phi = 0$ via symplectic Störmer-Verlet integration. Generates pulsating localized Breather modes and topological Kink-Antikink pairs with rich organic subharmonic formants.
 - **Acoustic Black Hole (ABH) & Sonic Horizon Waveguide:**
   Models retarding acoustic metamaterials with power-law phase velocity grading $c(x) = c_0 (x/L)^\alpha + c_{\min}$. High frequencies undergo infinite spatial compression ($k \to \infty$) and time dilation at the event horizon, paired with stimulated Unruh-Hawking thermal phonon emission.
+- **Relativistic Morris-Thorne Multi-Manifold Acoustic Wormhole:**
+  Couples two distinct Riemannian manifolds (Universe A and Universe B) through an acoustic throat of radius $b_0$. Simulates quasinormal mode (QNM) throat ringing, bidirectional symplectic acoustic flux conservation, and haunting inter-universe topological echoes.
+- **Topological Phononic Metamaterial & Chiral Dirac Edge States:**
+  Simulates a 2D hexagonal/honeycomb acoustic metamaterial with broken spatial inversion symmetry ($\mathcal{P}$). Features Dirac cone linear dispersion at the $K/K'$ valleys, a topological band gap with quantized valley Chern numbers $C_v = \pm 1/2$, and backscattering-immune chiral acoustic edge channels along domain wall boundaries.
+- **Toda Lattice / Integrable KdV Soliton Engine & FPUT Recurrence:**
+  Completely integrable 1D nonlinear lattice with exponential inter-particle potentials $V(r) = \frac{a}{b}(e^{-b r} - 1) + a r$. Exhibits elastic N-soliton collisions with exact analytical phase shifts and the celebrated Fermi-Pasta-Ulam-Tsingou (FPUT) non-thermalizing recurrence, yielding ultra-sharp, non-dispersive metallic acoustic transients.
 - **AVX2 SIMD Vectorized FDTD Kernel:**
   Processes 8 spatial grid cells per instruction using 8-wide vectorized fused multiply-add (`_mm256_fmadd_ps`) operations.
 - **Beltrami Pseudosphere Tractrix Horn Resonator:**
@@ -218,6 +224,9 @@ Drive the Poincaré hyperbolic waveguide with any external audio sample:
 | `17_partitioned_hyperbolic_cathedral.wav` | 32-bit Float WAV | Zero-latency uniform partitioned overlap-save FFT convolution with 1.8s manifold tail |
 | `18_sine_gordon_topological_breather.wav` | 32-bit Float WAV | Relativistic Sine-Gordon field with pulsating localized Breathers & Kink-Antikink collisions |
 | `19_acoustic_black_hole_horizon.wav` | 32-bit Float WAV | Retarding metamaterial waveguide with sonic event horizon & stimulated Hawking phonon radiation |
+| `20_morris_thorne_acoustic_wormhole.wav` | 32-bit Float WAV | Multi-manifold acoustic wormhole with throat quasinormal resonance & inter-universe echoes |
+| `21_topological_dirac_metamaterial.wav` | 32-bit Float WAV | Chiral Dirac topological phononic edge state propagating without backscattering |
+| `22_toda_kdv_integrable_soliton_lattice.wav` | 32-bit Float WAV | Completely integrable Toda lattice with elastic N-soliton collisions & FPUT recurrence |
 | `fibonacci_score.mid` | Standard MIDI Format 1 | Exported polyphonic score ready for DAW import (Ableton/FL Studio) |
 | `chladni_nodal_lines.svg` | Scalable Vector Graphics | 800x800 high-res vector visualization of Chladni nodal plate |
 | `poincare_tiling.svg` | Scalable Vector Graphics | 800x800 high-res vector art of Poincaré {7,3} hyperbolic tessellation |
@@ -276,6 +285,9 @@ aether-dsp/
 │       ├── hyperbolic_string.hpp    # Nonlinear stiff string with tension modulation & Jawari bridge
 │       ├── sine_gordon_breather.hpp # Integrable Sine-Gordon topological soliton & breather resonator
 │       ├── acoustic_black_hole.hpp  # Metamaterial acoustic black hole & Unruh sonic horizon
+│       ├── acoustic_wormhole.hpp    # Morris-Thorne multi-manifold acoustic throat coupling
+│       ├── topological_metamaterial.hpp # Valley-Hall Dirac phononic crystal & chiral edge states
+│       ├── kdv_soliton_lattice.hpp  # Toda completely integrable soliton lattice & FPUT recurrence
 │       ├── stick_slip_exciter.hpp   # Stribeck non-linear friction stick-slip continuous exciter
 │       ├── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
 │       └── hamiltonian_chaos.hpp    # Hénon-Heiles galactic gravitational chaos oscillator
@@ -287,7 +299,7 @@ aether-dsp/
 │   ├── audio_device.cpp           # Miniaudio hardware backend compilation unit
 │   └── c_api.cpp                  # C-ABI implementation
 ├── tests/
-│   └── unit_tests.cpp             # 35 extended mathematical invariants & audio stability tests
+│   └── unit_tests.cpp             # 38 extended mathematical invariants & audio stability tests
 ├── examples/
 │   ├── python_demo.py             # Python ctypes zero-dependency integration demo
 │   └── spectral_analysis.py       # Pure-Python physical inharmonicity & DFT spectral analyzer
@@ -301,7 +313,10 @@ aether-dsp/
 │   ├── singing_bowl.aether        # Stribeck stick-slip friction singing bowl preset
 │   ├── tibetan_gong.aether        # Kirchhoff-Love thin elastic plate gong preset
 │   ├── sine_gordon_breather.aether # Relativistic Sine-Gordon breather preset
-│   └── acoustic_black_hole.aether # Sonic event horizon waveguide preset
+│   ├── acoustic_black_hole.aether # Sonic event horizon waveguide preset
+│   ├── acoustic_wormhole.aether   # Multi-manifold throat coupling preset
+│   ├── topological_metamaterial.aether # Topological valley-Hall phononic crystal preset
+│   └── toda_soliton_lattice.aether # Toda integrable soliton lattice preset
 ├── web/
 │   ├── index.html                 # Standalone interactive browser GUI & 3D wireframe
 │   └── app.js                     # 3D Canvas visualizer, sand physics & Web Audio synth

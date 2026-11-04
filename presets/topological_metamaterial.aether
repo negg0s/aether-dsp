@@ -1,0 +1,12 @@
+# AetherDSP Preset Configuration File
+version = 1.0
+name = Topological Metamaterial
+preset_id = 12
+wave_speed = 0.38
+damping = 0.0005
+curvature_scale = 1
+plate_fundamental = 440
+plate_stiffness = 1
+reverb_decay = 0.82
+reverb_mix = 0.28
+tuning_scale = Slendro

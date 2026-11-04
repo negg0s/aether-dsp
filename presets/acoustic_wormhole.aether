@@ -1,0 +1,12 @@
+# AetherDSP Preset Configuration File
+version = 1.0
+name = Acoustic Wormhole
+preset_id = 11
+wave_speed = 0.42
+damping = 0.0006
+curvature_scale = 1.4
+plate_fundamental = 220
+plate_stiffness = 1
+reverb_decay = 0.86
+reverb_mix = 0.3
+tuning_scale = Wendy Carlos Alpha

@@ -16,6 +16,9 @@ pub enum Preset {
     HyperbolicString = 8,
     SineGordonBreather = 9,
     AcousticBlackHole = 10,
+    AcousticWormhole = 11,
+    TopologicalMetamaterial = 12,
+    KdvSolitonLattice = 13,
 }
 
 extern "C" {
