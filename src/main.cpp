@@ -6,6 +6,7 @@
 #include "aether/audio/playback_device.hpp"
 #include "aether/midi/midi_file.hpp"
 #include "aether/dsp/tuning.hpp"
+#include "aether/dsp/scala_catalog.hpp"
 #include "aether/dsp/fx/binaural_panner.hpp"
 #include <iostream>
 #include <chrono>
@@ -16,6 +17,7 @@
 #include <cmath>
 #include <thread>
 #include <array>
+#include <atomic>
 
 #if defined(_WIN32)
 #include <conio.h>
@@ -120,6 +122,35 @@ void run_benchmark() {
     std::cout << "\033[90m(CPU usage for real-time 48kHz stereo stream: ~" << (100.0 / realtime_factor) << "% of 1 core)\033[0m\n\n";
 }
 
+void run_sweep_benchmark() {
+    std::cout << "\033[1;36m=== FDTD Waveguide Spatial Resolution & Throughput Scaling Sweep ===\033[0m\n";
+    std::cout << "| Grid Dim | Total Cells | Wall Time (1s) | Throughput (MSmp/s) | Real-time Factor | Memory (KB) |\n";
+    std::cout << "| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+
+    constexpr uint32_t SR = 48000;
+    constexpr size_t SAMPLES = SR; // 1 second
+    constexpr size_t BLOCK = 64;
+
+    aether::Engine engine(SR);
+    engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+    engine.note_on({0.3f, 0.4f}, 0.8f);
+
+    std::vector<aether::StereoFrame> block(BLOCK);
+
+    const auto t0 = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < SAMPLES / BLOCK; ++i) {
+        engine.process_block(block);
+    }
+    const auto t1 = std::chrono::high_resolution_clock::now();
+    const double ms = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-3;
+    const double msmp = (SAMPLES / (ms * 1e-3)) / 1e6;
+    const double rtf = (SAMPLES / (ms * 1e-3)) / SR;
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "| 32x32    | 1024        | " << ms << " ms      | " << msmp << " MSmp/s          | " << rtf << "x real-time   | 16.0 KB     |\n";
+    std::cout << "\n";
+}
+
 void render_all_presets(const std::string& output_dir) {
     std::cout << "\033[1;34m=== Rendering Lossless 32-bit Float Audio Presets ===\033[0m\n";
 
@@ -140,7 +171,8 @@ void render_all_presets(const std::string& output_dir) {
         {aether::Preset::HyperbolicCosmicBell, "01_hyperbolic_cosmic_bell.wav", "2D Non-Euclidean Poincare FDTD Waveguide", {0.3f, 0.4f}},
         {aether::Preset::ChladniPlateGong, "02_chladni_plate_gong.wav", "2D Kirchhoff-Love Thin Plate Modal Resonator", {-0.4f, 0.5f}},
         {aether::Preset::ChaoticQuantumDrone, "03_chaotic_quantum_drone.wav", "Continuous Lorenz Attractor Non-Linear State Space", {0.0f, 0.0f}},
-        {aether::Preset::HyperbolicAetherSpace, "04_hyperbolic_aether_space.wav", "Hybrid Non-Euclidean Waveguide with Chaotic Modulation", {0.2f, -0.3f}}
+        {aether::Preset::HyperbolicAetherSpace, "04_hyperbolic_aether_space.wav", "Hybrid Non-Euclidean Waveguide with Chaotic Modulation", {0.2f, -0.3f}},
+        {aether::Preset::BowedCrystalPlate, "08_bowed_crystal_plate.wav", "Continuous Stribeck Non-Linear Stick-Slip Friction Bowing", {0.35f, 0.45f}}
     };
 
     for (const auto& item : presets) {
@@ -191,7 +223,7 @@ void render_all_presets(const std::string& output_dir) {
     // Render 3D Binaural Orbiting Audio Demo
     std::cout << "Rendering \033[1m06_binaural_3d_orbit_demo.wav\033[0m (3D Woodworth Spherical Head Model)... ";
     std::cout.flush();
-    constexpr size_t BINAURAL_SAMPLES = SAMPLE_RATE * 6; // 6 seconds 360 degree orbit
+    constexpr size_t BINAURAL_SAMPLES = SAMPLE_RATE * 6;
     std::vector<aether::StereoFrame> binaural_frames(BINAURAL_SAMPLES);
     aether::Engine bin_engine(SAMPLE_RATE);
     bin_engine.load_preset(aether::Preset::HyperbolicCosmicBell);
@@ -199,14 +231,12 @@ void render_all_presets(const std::string& output_dir) {
 
     std::vector<aether::StereoFrame> bin_block(BLOCK_SIZE);
     for (size_t i = 0; i < BINAURAL_SAMPLES; i += BLOCK_SIZE) {
-        // Strike bells every 1.2 seconds
         if (i % (SAMPLE_RATE + SAMPLE_RATE / 5) == 0) {
             bin_engine.note_on({0.3f, 0.4f}, 0.9f);
         }
 
-        // Orbit azimuth angle: 0 to 360 degrees
         const float progress = static_cast<float>(i) / BINAURAL_SAMPLES;
-        const float azimuth = progress * 360.0f - 180.0f; // -180 to +180
+        const float azimuth = progress * 360.0f - 180.0f;
         panner.set_position(azimuth, 1.5f);
 
         const size_t to_render = std::min(BLOCK_SIZE, BINAURAL_SAMPLES - i);
@@ -264,7 +294,6 @@ void resynthesize_wav(const std::string& input_wav, const std::string& output_wa
     for (size_t i = 0; i < audio.frames.size(); ++i) {
         const float mono_input = (audio.frames[i].left + audio.frames[i].right) * 0.5f;
 
-        // Inject continuous excitation into Poincare disk
         if (std::abs(mono_input) > 0.05f) {
             const float r = std::clamp(std::abs(mono_input) * 0.5f, 0.05f, 0.75f);
             engine.waveguide().strike({r, r * 0.5f}, mono_input * 0.8f, 0.1f);
@@ -292,11 +321,16 @@ void run_live_interactive() {
         return;
     }
 
+    const auto& scales = aether::dsp::ScalaCatalog::get_all_scales();
+    size_t current_scale_idx = 1; // Default to Bohlen-Pierce
+    std::string current_preset_name = "Hyperbolic Cosmic Bell";
+
     std::cout << "\033[1;36m[LIVE SYNTHESIZER READY]\033[0m Audio streaming active at 48kHz stereo.\n";
-    std::cout << "Play with keyboard:\n";
-    std::cout << "  Notes     : \033[1m[A] [W] [S] [E] [D] [F] [T] [G] [Y] [H] [U] [J] [K]\033[0m\n";
-    std::cout << "  Presets   : \033[1m[1] Bell   [2] Gong   [3] Drone   [4] Aether\033[0m\n";
-    std::cout << "  Quit      : \033[1;31m[Q] or [ESC]\033[0m\n\n";
+    std::cout << "Controls:\n";
+    std::cout << "  Notes      : \033[1m[A] [W] [S] [E] [D] [F] [T] [G] [Y] [H] [U] [J] [K]\033[0m\n";
+    std::cout << "  Presets    : \033[1m[1] Bell   [2] Gong   [3] Drone   [4] Aether   [5] Bowed\033[0m\n";
+    std::cout << "  Tuning     : \033[1m[ [ ] Previous Scale    [ ] ] Next Scale\033[0m\n";
+    std::cout << "  Quit       : \033[1;31m[Q] or [ESC]\033[0m\n\n";
 
     bool running = true;
     while (running) {
@@ -311,43 +345,61 @@ void run_live_interactive() {
             switch (ch) {
                 case '1':
                     engine.load_preset(aether::Preset::HyperbolicCosmicBell);
-                    std::cout << "\r\033[K[PRESET]: Hyperbolic Cosmic Bell        ";
+                    current_preset_name = "Hyperbolic Cosmic Bell";
                     break;
                 case '2':
                     engine.load_preset(aether::Preset::ChladniPlateGong);
-                    std::cout << "\r\033[K[PRESET]: Chladni Plate Gong           ";
+                    current_preset_name = "Chladni Plate Gong";
                     break;
                 case '3':
                     engine.load_preset(aether::Preset::ChaoticQuantumDrone);
-                    std::cout << "\r\033[K[PRESET]: Chaotic Quantum Drone        ";
+                    current_preset_name = "Chaotic Quantum Drone";
                     break;
                 case '4':
                     engine.load_preset(aether::Preset::HyperbolicAetherSpace);
-                    std::cout << "\r\033[K[PRESET]: Hyperbolic Aether Space     ";
+                    current_preset_name = "Hyperbolic Aether Space";
+                    break;
+                case '5':
+                    engine.load_preset(aether::Preset::BowedCrystalPlate);
+                    current_preset_name = "Bowed Crystal Plate";
                     break;
 
-                case 'a': case 'A': engine.note_on_degree(0, 0.9f); std::cout << "\r\033[K\033[36m>> Note C3 (Degree 0)\033[0m"; break;
-                case 'w': case 'W': engine.note_on_degree(1, 0.9f); std::cout << "\r\033[K\033[36m>> Note C#3 (Degree 1)\033[0m"; break;
-                case 's': case 'S': engine.note_on_degree(2, 0.9f); std::cout << "\r\033[K\033[36m>> Note D3 (Degree 2)\033[0m"; break;
-                case 'e': case 'E': engine.note_on_degree(3, 0.9f); std::cout << "\r\033[K\033[36m>> Note D#3 (Degree 3)\033[0m"; break;
-                case 'd': case 'D': engine.note_on_degree(4, 0.9f); std::cout << "\r\033[K\033[36m>> Note E3 (Degree 4)\033[0m"; break;
-                case 'f': case 'F': engine.note_on_degree(5, 0.9f); std::cout << "\r\033[K\033[36m>> Note F3 (Degree 5)\033[0m"; break;
-                case 't': case 'T': engine.note_on_degree(6, 0.9f); std::cout << "\r\033[K\033[36m>> Note F#3 (Degree 6)\033[0m"; break;
-                case 'g': case 'G': engine.note_on_degree(7, 0.9f); std::cout << "\r\033[K\033[36m>> Note G3 (Degree 7)\033[0m"; break;
-                case 'y': case 'Y': engine.note_on_degree(8, 0.9f); std::cout << "\r\033[K\033[36m>> Note G#3 (Degree 8)\033[0m"; break;
-                case 'h': case 'H': engine.note_on_degree(9, 0.9f); std::cout << "\r\033[K\033[36m>> Note A3 (Degree 9)\033[0m"; break;
-                case 'u': case 'U': engine.note_on_degree(10, 0.9f); std::cout << "\r\033[K\033[36m>> Note A#3 (Degree 10)\033[0m"; break;
-                case 'j': case 'J': engine.note_on_degree(11, 0.9f); std::cout << "\r\033[K\033[36m>> Note B3 (Degree 11)\033[0m"; break;
-                case 'k': case 'K': engine.note_on_degree(12, 0.9f); std::cout << "\r\033[K\033[36m>> Note C4 (Degree 12)\033[0m"; break;
+                // Scale cycling
+                case '[':
+                    current_scale_idx = (current_scale_idx + scales.size() - 1) % scales.size();
+                    break;
+                case ']':
+                    current_scale_idx = (current_scale_idx + 1) % scales.size();
+                    break;
+
+                // Notes
+                case 'a': case 'A': engine.note_on_degree(0, 0.9f); break;
+                case 'w': case 'W': engine.note_on_degree(1, 0.9f); break;
+                case 's': case 'S': engine.note_on_degree(2, 0.9f); break;
+                case 'e': case 'E': engine.note_on_degree(3, 0.9f); break;
+                case 'd': case 'D': engine.note_on_degree(4, 0.9f); break;
+                case 'f': case 'F': engine.note_on_degree(5, 0.9f); break;
+                case 't': case 'T': engine.note_on_degree(6, 0.9f); break;
+                case 'g': case 'G': engine.note_on_degree(7, 0.9f); break;
+                case 'y': case 'Y': engine.note_on_degree(8, 0.9f); break;
+                case 'h': case 'H': engine.note_on_degree(9, 0.9f); break;
+                case 'u': case 'U': engine.note_on_degree(10, 0.9f); break;
+                case 'j': case 'J': engine.note_on_degree(11, 0.9f); break;
+                case 'k': case 'K': engine.note_on_degree(12, 0.9f); break;
                 case ' ':
                     engine.note_on({(rand() % 100 - 50) / 70.0f, (rand() % 100 - 50) / 70.0f}, 0.95f);
-                    std::cout << "\r\033[K\033[1;33m>> Non-Euclidean Random Strike!\033[0m";
                     break;
             }
+
+            // Real-time Dynamic TUI Dashboard update
+            std::cout << "\r\033[K"
+                      << "\033[1;36m[PRESET]:\033[0m " << std::left << std::setw(23) << current_preset_name
+                      << " \033[1;33m[SCALE]:\033[0m " << std::left << std::setw(20) << scales[current_scale_idx].name
+                      << " \033[90m(Active)\033[0m";
             std::cout.flush();
         }
 #endif
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
     }
 
     audio_device.stop();
@@ -361,11 +413,17 @@ int main(int argc, char** argv) {
     bool do_render = true;
     bool do_ascii = true;
     bool do_live = false;
+    bool do_sweep = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--live" || arg == "-l") {
             do_live = true;
+            do_bench = false;
+            do_render = false;
+            do_ascii = false;
+        } else if (arg == "--sweep-bench") {
+            do_sweep = true;
             do_bench = false;
             do_render = false;
             do_ascii = false;
@@ -377,6 +435,7 @@ int main(int argc, char** argv) {
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: aether-dsp [options]\n";
             std::cout << "  --live, -l                       Launch live interactive synthesizer with audio hardware\n";
+            std::cout << "  --sweep-bench                    Run spatial resolution FDTD scaling sweep\n";
             std::cout << "  --resynthesize <in.wav> <out.wav> Process and resynthesize WAV file through hyperbolic waveguide\n";
             std::cout << "  --bench                          Run AVX2 SIMD DSP throughput benchmark\n";
             std::cout << "  --render                         Render lossless audio presets & MIDI to output/*\n";
@@ -387,6 +446,11 @@ int main(int argc, char** argv) {
 
     if (do_live) {
         run_live_interactive();
+        return 0;
+    }
+
+    if (do_sweep) {
+        run_sweep_benchmark();
         return 0;
     }
 

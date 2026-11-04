@@ -5,10 +5,12 @@
 #include "aether/math/hyperbolic_tiling.hpp"
 #include "aether/dsp/biquad.hpp"
 #include "aether/dsp/tuning.hpp"
+#include "aether/dsp/scala_catalog.hpp"
 #include "aether/dsp/fx/hyperbolic_reverb.hpp"
 #include "aether/dsp/fx/binaural_panner.hpp"
 #include "aether/engines/hyperbolic_waveguide.hpp"
 #include "aether/engines/chladni_plate.hpp"
+#include "aether/engines/stick_slip_exciter.hpp"
 #include "aether/midi/midi_file.hpp"
 #include "aether/wav_writer.hpp"
 #include "aether/wav_reader.hpp"
@@ -253,8 +255,35 @@ void test_clap_plugin_descriptor() {
     std::cout << "PASSED\n";
 }
 
+void test_stick_slip_exciter() {
+    std::cout << "[TEST] Stick-Slip Stribeck Friction Exciter... ";
+    aether::engines::StickSlipExciter exciter;
+    exciter.configure(0.8f, 0.3f, 4.0f);
+
+    float f0 = exciter.compute_force(0.5f, 1.0f, 0.0f);
+    assert(f0 > 0.0f);
+    assert(!std::isnan(f0));
+
+    // Zero relative velocity yields zero force
+    float f_zero = exciter.compute_force(0.5f, 1.0f, 0.5f);
+    assert(std::abs(f_zero) < 1e-3f);
+    std::cout << "PASSED\n";
+}
+
+void test_scala_catalog() {
+    std::cout << "[TEST] Scala Microtonal Scale Catalog... ";
+    const auto& scales = aether::dsp::ScalaCatalog::get_all_scales();
+    assert(scales.size() >= 8);
+    for (const auto& sc : scales) {
+        assert(sc.period > 1.0);
+        assert(!sc.ratios.empty());
+        assert(sc.ratios[0] == 1.0);
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (13 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (15 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -268,6 +297,8 @@ int main() {
     test_wav_roundtrip();
     test_c_api();
     test_clap_plugin_descriptor();
-    std::cout << "\033[1;32mALL 13 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_stick_slip_exciter();
+    test_scala_catalog();
+    std::cout << "\033[1;32mALL 15 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

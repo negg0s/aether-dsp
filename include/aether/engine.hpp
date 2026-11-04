@@ -5,10 +5,12 @@
 #include "dsp/biquad.hpp"
 #include "dsp/envelope.hpp"
 #include "dsp/tuning.hpp"
+#include "dsp/scala_catalog.hpp"
 #include "dsp/fx/hyperbolic_reverb.hpp"
 #include "engines/hyperbolic_waveguide.hpp"
 #include "engines/chladni_plate.hpp"
 #include "engines/chaotic_oscillator.hpp"
+#include "engines/stick_slip_exciter.hpp"
 #include <span>
 #include <string_view>
 #include <algorithm>
@@ -19,7 +21,8 @@ enum class Preset {
     HyperbolicCosmicBell,  // Non-Euclidean Poincare FDTD resonance with exponential dispersion
     ChladniPlateGong,      // 2D Nodal thin elastic plate physical model
     ChaoticQuantumDrone,   // Lorenz/Clifford Strange Attractor non-linear harmonic bed
-    HyperbolicAetherSpace  // Hybrid hyperbolic waveguide with chaotic dynamic spatial excitation
+    HyperbolicAetherSpace, // Hybrid hyperbolic waveguide with chaotic dynamic spatial excitation
+    BowedCrystalPlate      // Continuous Stribeck stick-slip friction bowed elastic plate
 };
 
 /**
@@ -74,6 +77,14 @@ public:
                 filter_l_.configure(dsp::FilterType::Lowpass, 11000.0f, 1.2f, static_cast<float>(sample_rate_));
                 filter_r_.configure(dsp::FilterType::Lowpass, 11000.0f, 1.2f, static_cast<float>(sample_rate_));
                 reverb_.configure(0.90f, 0.20f, 0.35f);
+                break;
+
+            case Preset::BowedCrystalPlate:
+                chladni_.configure(320.0f, 0.95f, static_cast<float>(sample_rate_));
+                exciter_.configure(0.85f, 0.30f, 3.5f);
+                filter_l_.configure(dsp::FilterType::Lowpass, 15000.0f, 0.9f, static_cast<float>(sample_rate_));
+                filter_r_.configure(dsp::FilterType::Lowpass, 15000.0f, 0.9f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.94f, 0.12f, 0.42f);
                 break;
         }
     }
@@ -144,6 +155,15 @@ public:
                     sample = wg * 0.7f + pl * 0.3f;
                     break;
                 }
+
+                case Preset::BowedCrystalPlate: {
+                    // Continuous stick-slip friction feedback loop
+                    const auto pl = chladni_.step({-0.4f, -0.4f}, {0.4f, 0.4f});
+                    const float friction_force = exciter_.compute_force(0.25f, 1.2f, (pl.left + pl.right) * 0.5f);
+                    chladni_.strike({0.35f, 0.45f}, friction_force * 0.015f);
+                    sample = pl * 0.85f;
+                    break;
+                }
             }
 
             // Master lowpass filter
@@ -177,6 +197,7 @@ private:
     engines::HyperbolicWaveguide waveguide_;
     engines::ChladniPlate chladni_;
     engines::ChaoticOscillator chaos_;
+    engines::StickSlipExciter exciter_;
     dsp::BiquadFilter filter_l_;
     dsp::BiquadFilter filter_r_;
     dsp::ADSREnvelope env_;
