@@ -84,12 +84,10 @@ public:
         pos.y = std::clamp(pos.y, -0.95f, 0.95f);
 
         for (auto& mode : modes_) {
-            // Spatial eigenfunction projection: w(x,y) = sin(m*pi*(x+1)/2) * sin(n*pi*(y+1)/2)
             const float phi_x = std::sin(mode.m * std::numbers::pi_v<float> * (pos.x + 1.0f) * 0.5f);
             const float phi_y = std::sin(mode.n * std::numbers::pi_v<float> * (pos.y + 1.0f) * 0.5f);
             const float spatial_gain = phi_x * phi_y;
 
-            // Direct impulse excitation into modal velocity
             mode.v += velocity * spatial_gain * 80.0f;
         }
 
@@ -106,7 +104,6 @@ public:
 
         const size_t num_modes = modes_.size();
 
-        // Precompute total energy in lower modes to drive turbulent energy cascade into highs
         float low_mode_energy = 0.0f;
         for (size_t i = 0; i < std::min<size_t>(6, num_modes); ++i) {
             low_mode_energy += modes_[i].q * modes_[i].q;
@@ -116,25 +113,19 @@ public:
             auto& m = modes_[i];
             const float omega = m.frequency * (2.0f * std::numbers::pi_v<float>);
 
-            // Nonlinear Duffing cubic term: beta * q^3
             const float q2 = m.q * m.q;
             const float f_duffing = m.beta * q2 * m.q;
 
-            // Inter-modal energy cascade: energy from lower modes pumps higher shimmer modes
             float f_cascade = 0.0f;
             if (i > 6 && nonlinearity_ > 0.01f) {
                 f_cascade = m.coupling * low_mode_energy * m.q;
             }
 
-            // Total acceleration
-            const float accel = - (omega * omega) * m.q - 2.0f * m.damping * omega * m.v - f_duffing - f_cascade;
+            const float accel = -(omega * omega) * m.q - 2.0f * m.damping * omega * m.v - f_duffing - f_cascade;
 
-            // Velocity-Verlet symplectic integration step
             m.v += accel * dt_;
             m.q += m.v * dt_;
 
-            // Spatial pickup at two stereo locations
-            // Pickup Left: (-0.4, 0.3), Pickup Right: (0.4, -0.3)
             const float phi_l = std::sin(m.m * std::numbers::pi_v<float> * 0.3f) * std::sin(m.n * std::numbers::pi_v<float> * 0.65f);
             const float phi_r = std::sin(m.m * std::numbers::pi_v<float> * 0.7f) * std::sin(m.n * std::numbers::pi_v<float> * 0.35f);
 
@@ -142,7 +133,6 @@ public:
             out_r += m.q * phi_r;
         }
 
-        // Soft saturation limiter to prevent digital clipping under violent strikes
         const float sat_l = std::tanh(out_l * 0.25f);
         const float sat_r = std::tanh(out_r * 0.25f);
 

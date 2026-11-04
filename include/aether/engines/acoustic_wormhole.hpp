@@ -103,16 +103,13 @@ public:
         u_a_next_[UNIVERSE_GRID - 1] = u_a_[UNIVERSE_GRID - 2] * 0.94f;
         u_b_next_[UNIVERSE_GRID - 1] = u_b_[UNIVERSE_GRID - 2] * 0.94f;
 
-        // --- 1. Propagate Universe A ---
         for (size_t i = 1; i < UNIVERSE_GRID - 1; ++i) {
-            // Radial metric factor: area scaling S(r) = sqrt(b0^2 + r^2)
             const float r = static_cast<float>(i);
             const float r_factor = 1.0f + 0.5f * (b0_ * b0_) / (1.0f + r * r);
             const float laplacian = (u_a_[i + 1] - 2.0f * u_a_[i] + u_a_[i - 1]) * r_factor;
             u_a_next_[i] = ((2.0f - damping_) * u_a_[i] - u_a_prev_[i] + c2 * laplacian) * damp_factor;
         }
 
-        // --- 2. Propagate Universe B ---
         for (size_t i = 1; i < UNIVERSE_GRID - 1; ++i) {
             const float r = static_cast<float>(i);
             const float r_factor = 1.0f + 0.5f * (b0_ * b0_) / (1.0f + r * r);
@@ -120,14 +117,12 @@ public:
             u_b_next_[i] = ((2.0f - damping_) * u_b_[i] - u_b_prev_[i] + c2 * laplacian) * damp_factor;
         }
 
-        // --- 3. Propagate Wormhole Throat ---
-        // Node 0 couples to Universe A (u_a_[0]), Node THROAT_NODES - 1 couples to Universe B (u_b_[0])
+        // Throat boundaries couple to Universe A (u_a_[0]) and Universe B (u_b_[0])
         const float laplacian_t0 = throat_[1] - 2.0f * throat_[0] + u_a_[0] * b0_;
         throat_next_[0] = ((2.0f - damping_) * throat_[0] - throat_prev_[0] + c2 * laplacian_t0) * damp_factor;
 
         for (size_t k = 1; k < THROAT_NODES - 1; ++k) {
             const float laplacian = throat_[k + 1] - 2.0f * throat_[k] + throat_[k - 1];
-            // Quasinormal mode potential barrier V_QNM = throat_stiffness * (1 - sech^2(x))
             const float qnm_restore = -throat_stiffness_ * 0.05f * throat_[k];
             throat_next_[k] = (2.0f * throat_[k] - throat_prev_[k] + c2 * laplacian + qnm_restore) * 0.9995f;
         }
@@ -135,14 +130,12 @@ public:
         const float laplacian_tend = u_b_[0] * b0_ - 2.0f * throat_[THROAT_NODES - 1] + throat_[THROAT_NODES - 2];
         throat_next_[THROAT_NODES - 1] = ((2.0f - damping_) * throat_[THROAT_NODES - 1] - throat_prev_[THROAT_NODES - 1] + c2 * laplacian_tend) * damp_factor;
 
-        // Junction boundary conditions at r = 0 for both universes:
         const float laplacian_a0 = u_a_[1] - 2.0f * u_a_[0] + throat_[0] * b0_;
         u_a_next_[0] = ((2.0f - damping_) * u_a_[0] - u_a_prev_[0] + c2 * laplacian_a0) * damp_factor;
 
         const float laplacian_b0 = u_b_[1] - 2.0f * u_b_[0] + throat_[THROAT_NODES - 1] * b0_;
         u_b_next_[0] = ((2.0f - damping_) * u_b_[0] - u_b_prev_[0] + c2 * laplacian_b0) * damp_factor;
 
-        // Shift buffers
         u_a_prev_ = u_a_;
         u_a_ = u_a_next_;
 
@@ -152,7 +145,6 @@ public:
         throat_prev_ = throat_;
         throat_ = throat_next_;
 
-        // Pickups: Left = Far-field Universe A, Right = Far-field Universe B
         constexpr size_t PICKUP = static_cast<size_t>(UNIVERSE_GRID * 0.45f);
         const float out_a = (u_a_[PICKUP] - u_a_prev_[PICKUP]) * 2.2f;
         const float out_b = (u_b_[PICKUP] - u_b_prev_[PICKUP]) * 2.2f;

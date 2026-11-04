@@ -148,7 +148,7 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 # Build targets (CLI synthesizer, shared C-ABI library & test suite)
 cmake --build build --config Release
 
-# Run complete 13-test invariant suite
+# Run complete 38-test invariant suite
 ctest --test-dir build --output-on-failure
 ```
 

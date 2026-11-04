@@ -84,7 +84,6 @@ public:
         std::vector<RayArrival> arrivals;
         std::vector<GeodesicRay> rays(config_.num_rays);
 
-        // Initialize rays isotropically from source position
         const float lambda_src = PoincareDisk::conformal_factor(source);
         const float v_coord = 1.0f / (lambda_src > 1e-3f ? lambda_src : 1.0f);
 
@@ -108,7 +107,6 @@ public:
                 if (!ray.active) continue;
                 any_active = true;
 
-                // 4th-Order Runge-Kutta numerical step for geodesic equations
                 Vec2 k1_pos, k1_vel;
                 compute_geodesic_derivs(ray.pos, ray.vel, k1_pos, k1_vel);
 
@@ -136,13 +134,11 @@ public:
                 ray.total_distance += ds;
                 ray.proper_time += ds / config_.speed_of_sound;
 
-                // Check boundary reflection
                 if (r >= config_.boundary_radius) {
                     if (ray.bounces >= 8 || ray.energy < 0.01f) {
                         ray.active = false;
                         continue;
                     }
-                    // Hyperbolic normal reflection at disk boundary
                     const Vec2 normal = ray.pos.normalized();
                     const float v_dot_n = ray.vel.dot(normal);
                     if (v_dot_n > 0.0f) {
@@ -153,7 +149,6 @@ public:
                     }
                 }
 
-                // Check proximity to receiver
                 const float dist_to_rec = (ray.pos - receiver).length();
                 if (dist_to_rec < config_.capture_radius) {
                     const float d_hyp = PoincareDisk::geodesic_distance(source, ray.pos);

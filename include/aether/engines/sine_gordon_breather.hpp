@@ -121,31 +121,22 @@ public:
         const float dt2_omega0_sq = (omega0_rad * dt) * (omega0_rad * dt);
         const float damp_factor = 1.0f / (1.0f + damping_);
 
-        // Fixed / absorbing boundary conditions at ends
         phi_next_[0] = 0.0f;
         phi_next_[GRID_SIZE - 1] = 0.0f;
 
         for (size_t i = 1; i < GRID_SIZE - 1; ++i) {
-            // Spatial 2nd derivative (Laplacian in 1D)
             const float laplacian = phi_[i + 1] - 2.0f * phi_[i] + phi_[i - 1];
-
-            // Sine-Gordon nonlinear potential restoring force: -\sin(\phi)
             const float nonlinear_force = -std::sin(phi_[i]) * dt2_omega0_sq;
-
-            // Störmer-Verlet time-stepping with velocity damping
             const float acc = c2 * laplacian + nonlinear_force;
             phi_next_[i] = ((2.0f - damping_) * phi_[i] - phi_prev_[i] + acc) * damp_factor;
         }
 
-        // Stereo pickups: Left at 38% of string, Right at 62%
         constexpr size_t PICKUP_L = static_cast<size_t>(GRID_SIZE * 0.38f);
         constexpr size_t PICKUP_R = static_cast<size_t>(GRID_SIZE * 0.62f);
 
-        // Acoustic pressure is proportional to local velocity d\phi/dt
         const float out_l = (phi_next_[PICKUP_L] - phi_prev_[PICKUP_L]) * 0.5f;
         const float out_r = (phi_next_[PICKUP_R] - phi_prev_[PICKUP_R]) * 0.5f;
 
-        // Shift time buffers
         phi_prev_ = phi_;
         phi_ = phi_next_;
         time_ += dt;

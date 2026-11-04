@@ -48,18 +48,14 @@ public:
         p_previous_.assign(NUM_CELLS, 0.0f);
         p_next_.assign(NUM_CELLS, 0.0f);
 
-        // Compute Tractrix pseudosphere flare cross-sectional area: S(z) = pi * r(z)^2
         for (size_t i = 0; i < NUM_CELLS; ++i) {
             const float z = i * dz_;
-            // Normalized position along the tractrix
             const float u = (config_.horn_length_m - z) / config_.curvature_a;
-            // r(z) blends from throat to bell following sech(u)
             const float sech_u = 1.0f / std::cosh(std::clamp(u, 0.0f, 6.0f));
             const float r = config_.throat_radius_m + (config_.bell_radius_m - config_.throat_radius_m) * sech_u;
             area_[i] = std::numbers::pi_v<float> * r * r;
         }
 
-        // Lowpass radiation filter state at open bell
         bell_radiation_state_ = 0.0f;
     }
 
@@ -108,24 +104,17 @@ public:
             p_next_[i] = (2.0f * p_current_[i] - p_previous_[i] * gamma + r2 * spatial_deriv) * gamma;
         }
 
-        // Throat boundary condition (i = 0): closed / semi-reflective with driver input
         p_next_[0] = p_current_[1] * 0.98f;
 
-        // Mouth / bell radiation boundary condition (i = NUM_CELLS - 1):
-        // Tractrix bell radiates high frequencies and reflects low frequencies below cutoff f_c
         const float p_bell = p_current_[NUM_CELLS - 2];
-        const float radiation_cutoff = 0.25f; // Bell transmission factor
+        const float radiation_cutoff = 0.25f;
         bell_radiation_state_ = bell_radiation_state_ * (1.0f - radiation_cutoff) + p_bell * radiation_cutoff;
-        p_next_[NUM_CELLS - 1] = - (p_bell - bell_radiation_state_) * 0.85f; // Phase inversion on reflection
+        p_next_[NUM_CELLS - 1] = -(p_bell - bell_radiation_state_) * 0.85f;
 
-        // Cycle FDTD time buffers
         std::copy(p_current_.begin(), p_current_.end(), p_previous_.begin());
         std::copy(p_next_.begin(), p_next_.end(), p_current_.begin());
 
-        // Radiated acoustic wave at the bell (time derivative of mouth volume velocity)
         const float radiated_pressure = (p_current_[NUM_CELLS - 1] - p_previous_[NUM_CELLS - 1]) * 4.0f;
-
-        // Stereo spatialization: Bell mouth pickup + Throat resonance
         const float out_l = radiated_pressure * 0.85f + p_current_[0] * 0.15f;
         const float out_r = radiated_pressure * 0.70f + p_current_[NUM_CELLS / 2] * 0.30f;
 

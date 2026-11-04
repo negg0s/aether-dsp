@@ -82,18 +82,13 @@ public:
     StereoFrame process() noexcept {
         const size_t horizon_idx = static_cast<size_t>(horizon_pos_ * static_cast<float>(LATTICE_SIZE));
 
-        // Fixed / open boundary at entrance (x = LATTICE_SIZE - 1)
         u_next_[LATTICE_SIZE - 1] = u_[LATTICE_SIZE - 2] * 0.88f;
+        u_next_[0] = u_[1] * 0.15f;
 
-        // Black hole horizon boundary (x = 0): asymptotic acoustic sink
-        u_next_[0] = u_[1] * 0.15f; // Strong anechoic termination
-
-        // Interior FDTD wave propagation with spatially varying wave speed c[i]
         for (size_t i = 1; i < LATTICE_SIZE - 1; ++i) {
             const float c_local = c_profile_[i];
             const float d_local = damping_profile_[i];
 
-            // 1D spatial derivative with impedance grading: d/dx ( c(x)^2 du/dx )
             const float du_dx_right = (u_[i + 1] - u_[i]);
             const float du_dx_left  = (u_[i] - u_[i - 1]);
             const float c_mid_r = 0.5f * (c_profile_[i + 1] + c_local);
@@ -101,10 +96,8 @@ public:
             
             const float flux = (c_mid_r * c_mid_r * du_dx_right - c_mid_l * c_mid_l * du_dx_left);
 
-            // Thermal Hawking-Unruh phonon fluctuation injection near horizon
             float hawking_noise = 0.0f;
             if (i <= horizon_idx + 4) {
-                // Pseudo-random thermal fluctuation scaled by local gradient
                 hawking_noise = hawking_coupling_ * grad_profile_[i] * pseudo_random();
             }
 
@@ -112,10 +105,7 @@ public:
             u_next_[i] = ((2.0f - d_local) * u_[i] - u_prev_[i] + flux + hawking_noise) * denom;
         }
 
-        // Stereo pickups:
-        // Left: Far-field outward traveling wave (entrance)
         constexpr size_t OUT_PICKUP = static_cast<size_t>(LATTICE_SIZE * 0.82f);
-        // Right: Near-horizon event boundary
         const size_t HORIZON_PICKUP = std::max<size_t>(1, horizon_idx + 2);
 
         const float out_l = (u_next_[OUT_PICKUP] - u_prev_[OUT_PICKUP]) * 1.5f;

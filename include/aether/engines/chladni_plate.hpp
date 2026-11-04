@@ -106,7 +106,6 @@ public:
             const float osc = std::sin(mode.phase);
             const float current_sample = osc * mode.amplitude;
 
-            // Compute spatial pickup coupling
             const float ml_x = mode.m * static_cast<float>(constants::PI) * (pickup_l.x * 0.5f + 0.5f);
             const float ml_y = mode.n * static_cast<float>(constants::PI) * (pickup_l.y * 0.5f + 0.5f);
             const float nl_x = mode.n * static_cast<float>(constants::PI) * (pickup_l.x * 0.5f + 0.5f);
@@ -122,7 +121,6 @@ public:
             left += current_sample * shape_l;
             right += current_sample * shape_r;
 
-            // Advance phase and decay
             mode.phase += two_pi * mode.frequency * inv_sr;
             if (mode.phase > two_pi) {
                 mode.phase -= two_pi;

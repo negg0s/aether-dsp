@@ -60,12 +60,10 @@ public:
      */
     [[nodiscard]] static bool is_inside_fundamental_domain(Vec2 p) noexcept {
         const auto verts = get_octagon_vertices();
-        // Check signed distance to all 8 geodesic bounding chords
         for (size_t i = 0; i < NUM_SIDES; ++i) {
             const auto& v1 = verts[i];
             const auto& v2 = verts[(i + 1) % NUM_SIDES];
 
-            // 2D cross product (v2 - v1) x (p - v1)
             const float cross = (v2.x - v1.x) * (p.y - v1.y) - (v2.y - v1.y) * (p.x - v1.x);
             if (cross < -1e-4f) {
                 return false;
@@ -132,16 +130,14 @@ public:
                 pos.y += vel.y * (DT / cf);
                 elapsed_time += DT;
 
-                // Check octagon boundary wrapping
                 const float dist_center = std::sqrt(pos.x * pos.x + pos.y * pos.y);
                 if (dist_center >= VERTEX_RADIUS * 0.92f) {
                     const float ray_ang = std::atan2(pos.y, pos.x);
                     const int side = std::clamp(static_cast<int>((ray_ang + std::numbers::pi_v<float>) / (std::numbers::pi_v<float> / 4.0f)), 0, 7);
                     pos = wrap_point(pos, static_cast<size_t>(side));
-                    energy *= 0.965f; // Boundary transmission loss
+                    energy *= 0.965f;
                 }
 
-                // Check arrival at receiver
                 const float rx = pos.x - receiver.x;
                 const float ry = pos.y - receiver.y;
                 const float dist_rec = std::sqrt(rx * rx + ry * ry);
@@ -154,7 +150,7 @@ public:
                     }
                 }
 
-                energy *= 0.9997f; // Manifold propagation air absorption
+                energy *= 0.9997f;
                 if (energy < 1e-4f) break;
             }
         }

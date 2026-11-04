@@ -64,20 +64,16 @@ public:
 
         // Yoshida 4th-order integration steps for 2 coupled dimensions (x, y)
         auto step_yoshida = [&](double c_sub, double d_sub) {
-            // Position drift: q += c * dt * p
             state_.x += c_sub * dt * state_.px;
             state_.y += c_sub * dt * state_.py;
 
-            // Compute forces: Fx = -dV/dx, Fy = -dV/dy
             const double fx = -state_.x - 2.0 * state_.x * state_.y;
             const double fy = -state_.y - state_.x * state_.x + state_.y * state_.y;
 
-            // Momentum kick: p += d * dt * F
             state_.px += d_sub * dt * fx;
             state_.py += d_sub * dt * fy;
         };
 
-        // 4 Symmetric Yoshida stages
         using aether::math::Yoshida4thIntegrator;
         step_yoshida(Yoshida4thIntegrator::C1, Yoshida4thIntegrator::D1);
         step_yoshida(Yoshida4thIntegrator::C2, Yoshida4thIntegrator::D2);

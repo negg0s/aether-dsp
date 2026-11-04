@@ -94,34 +94,28 @@ public:
         const float half_dt = 0.5f * dt;
         const float damp_factor = 1.0f - damping_;
 
-        // 1. Kick step: p(t + dt/2) = p(t) + half_dt * F(q(t))
         compute_forces();
         for (size_t i = 1; i < LATTICE_SIZE - 1; ++i) {
             p_[i] = (p_[i] + half_dt * f_[i]) * damp_factor;
         }
 
-        // 2. Drift step: q(t + dt) = q(t) + dt * p(t + dt/2)
         for (size_t i = 1; i < LATTICE_SIZE - 1; ++i) {
             q_[i] += dt * p_[i];
         }
 
-        // Fixed rigid wall boundaries: q[0] = 0, q[N-1] = 0
         q_[0] = 0.0f;
         p_[0] = 0.0f;
         q_[LATTICE_SIZE - 1] = 0.0f;
         p_[LATTICE_SIZE - 1] = 0.0f;
 
-        // 3. Kick step: p(t + dt) = p(t + dt/2) + half_dt * F(q(t + dt))
         compute_forces();
         for (size_t i = 1; i < LATTICE_SIZE - 1; ++i) {
             p_[i] = (p_[i] + half_dt * f_[i]) * damp_factor;
         }
 
-        // Stereo pickups: Left = strain at 30% of lattice, Right = strain at 70%
         constexpr size_t PICKUP_L = static_cast<size_t>(LATTICE_SIZE * 0.30f);
         constexpr size_t PICKUP_R = static_cast<size_t>(LATTICE_SIZE * 0.70f);
 
-        // Acoustic strain is relative displacement: r_n = q_{n+1} - q_n
         const float strain_l = (q_[PICKUP_L + 1] - q_[PICKUP_L]) * 1.8f;
         const float strain_r = (q_[PICKUP_R + 1] - q_[PICKUP_R]) * 1.8f;
 

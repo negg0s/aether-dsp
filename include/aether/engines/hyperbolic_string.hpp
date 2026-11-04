@@ -51,16 +51,13 @@ public:
         y_next_.assign(NUM_POINTS, 0.0f);
         jawari_profile_.resize(NUM_POINTS);
 
-        // Compute curved hyperbolic Jawari bridge profile: h(x) = -h0 * sech(x / a)
         for (size_t i = 0; i < NUM_POINTS; ++i) {
             const float x = i * dx_;
-            // The bridge is located near the nut/bridge boundary (first 25% of string)
             const float u = x / config_.jawari_curvature;
             const float sech_u = 1.0f / std::cosh(std::clamp(u, 0.0f, 10.0f));
             jawari_profile_[i] = -config_.jawari_height * (1.0f - sech_u);
         }
 
-        // Base wave speed: c = 2 * L * f0
         c0_ = 2.0f * config_.length_m * config_.fundamental_hz;
         courant_ = (c0_ * dt_) / dx_;
     }
@@ -118,14 +115,10 @@ public:
 
         // 2. Interior FDTD update for stiff string
         for (size_t i = 2; i < NUM_POINTS - 2; ++i) {
-            // Second spatial derivative (tension)
             const float d2y = y_current_[i + 1] - 2.0f * y_current_[i] + y_current_[i - 1];
-
-            // Fourth spatial derivative (bending stiffness)
             const float d4y = y_current_[i + 2] - 4.0f * y_current_[i + 1] + 6.0f * y_current_[i]
                               - 4.0f * y_current_[i - 1] + y_current_[i - 2];
 
-            // Frequency-dependent damping: b2 * d^3 y / (dx^2 dt)
             const float damp_term = (2.0f * b2 * dt_ / (dx_ * dx_)) *
                 ((y_current_[i + 1] - 2.0f * y_current_[i] + y_current_[i - 1]) -
                  (y_previous_[i + 1] - 2.0f * y_previous_[i] + y_previous_[i - 1]));
@@ -133,10 +126,8 @@ public:
             float y_new = (2.0f * y_current_[i] - y_previous_[i] * (1.0f - b1 * dt_)
                            + r2 * d2y - mu * d4y + damp_term) * inv_denom;
 
-            // 3. Unilateral Hyperbolic Jawari Bridge Contact Obstacle
             const float penetration = jawari_profile_[i] - y_new;
             if (penetration > 0.0f) {
-                // Hertzian contact force penalty: F = K * delta^1.5
                 const float contact_force = config_.jawari_stiffness * penetration * std::sqrt(penetration);
                 y_new += (contact_force * dt_ * dt_);
             }
@@ -144,19 +135,16 @@ public:
             y_next_[i] = y_new;
         }
 
-        // Boundary conditions: clamped ends y(0) = y(L) = 0 and d2y/dx2 = 0
         y_next_[0] = 0.0f;
         y_next_[NUM_POINTS - 1] = 0.0f;
         y_next_[1] = y_next_[2] * 0.5f;
         y_next_[NUM_POINTS - 2] = y_next_[NUM_POINTS - 3] * 0.5f;
 
-        // Cycle time buffers
         std::copy(y_current_.begin(), y_current_.end(), y_previous_.begin());
         std::copy(y_next_.begin(), y_next_.end(), y_current_.begin());
 
-        // Stereo pickups: Pickup 1 near bridge (rich buzzing harmonics), Pickup 2 near center
-        constexpr size_t PICKUP_L = NUM_POINTS / 6;     // 16% along length
-        constexpr size_t PICKUP_R = NUM_POINTS / 2 + 4; // 56% along length
+        constexpr size_t PICKUP_L = NUM_POINTS / 6;
+        constexpr size_t PICKUP_R = NUM_POINTS / 2 + 4;
 
         const float out_l = y_current_[PICKUP_L] * 80.0f;
         const float out_r = y_current_[PICKUP_R] * 80.0f;
