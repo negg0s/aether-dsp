@@ -1,6 +1,9 @@
 #include "aether/engine.hpp"
 #include "aether/wav_writer.hpp"
 #include "aether/math/algorithmic_composer.hpp"
+#include "aether/audio/playback_device.hpp"
+#include "aether/midi/midi_file.hpp"
+#include "aether/dsp/tuning.hpp"
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -8,6 +11,16 @@
 #include <iomanip>
 #include <filesystem>
 #include <cmath>
+#include <thread>
+
+#if defined(_WIN32)
+#include <conio.h>
+#else
+#include <termios.h>
+#include <unistd.h>
+int _getch() { return getchar(); }
+int _kbhit() { return 1; }
+#endif
 
 namespace fs = std::filesystem;
 
@@ -21,7 +34,7 @@ void print_banner() {
 /_/  |_\___/\__/_/ /_/\___/_/     /_____//____/_/       
     )" << "\033[0m\n";
     std::cout << "\033[1;33m[Non-Euclidean Hyperbolic Waveguide & Modal Cymatics Engine (C++20)]\033[0m\n";
-    std::cout << "\033[90mBuilt by Emir (negg0s) | Zero-OS-lock-in | AVX2 SIMD Accelerated\033[0m\n\n";
+    std::cout << "\033[90mBuilt by Emir (negg0s) | AVX2 SIMD | Live Audio Device | MIDI Engine\033[0m\n\n";
 }
 
 void print_ascii_cymatics(const aether::engines::ChladniPlate& plate) {
@@ -47,7 +60,6 @@ void print_ascii_cymatics(const aether::engines::ChladniPlate& plate) {
         for (int x = 0; x < WIDTH; ++x) {
             const float norm = grid[y * WIDTH + x] / max_val;
             if (norm < 0.12f) {
-                // Nodal line: zero vibration, sand gathers here!
                 std::cout << "\033[1;33m#\033[0m";
             } else if (norm < 0.40f) {
                 std::cout << "\033[36m.\033[0m";
@@ -66,7 +78,7 @@ void run_benchmark() {
     std::cout << "\033[1;32m=== Starting High-Precision AVX2 SIMD DSP Performance Benchmark ===\033[0m\n";
     constexpr uint32_t SAMPLE_RATE = 48000;
     constexpr size_t BLOCK_SIZE = 64;
-    constexpr size_t TOTAL_SAMPLES = SAMPLE_RATE * 3; // 3 seconds of high-precision audio
+    constexpr size_t TOTAL_SAMPLES = SAMPLE_RATE * 3;
     constexpr size_t TOTAL_BLOCKS = TOTAL_SAMPLES / BLOCK_SIZE;
 
     aether::Engine engine(SAMPLE_RATE);
@@ -75,12 +87,10 @@ void run_benchmark() {
 
     std::vector<aether::StereoFrame> block(BLOCK_SIZE);
 
-    // Warm-up cache
     for (size_t i = 0; i < 50; ++i) {
         engine.process_block(block);
     }
 
-    // Benchmark loop
     const auto start_time = std::chrono::high_resolution_clock::now();
 
     for (size_t b = 0; b < TOTAL_BLOCKS; ++b) {
@@ -169,10 +179,104 @@ void render_all_presets(const std::string& output_dir) {
     const std::string sonata_path = (fs::path(output_dir) / "05_fibonacci_non_euclidean_sonata.wav").string();
     const bool sonata_ok = aether::WavWriter::write_stereo_wav(sonata_path, sonata_frames, SAMPLE_RATE, true);
     if (sonata_ok) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << sonata_path << "\n\n";
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << sonata_path << "\n";
+    } else {
+        std::cout << "\033[1;31m[FAILED]\033[0m\n";
+    }
+
+    // Export Standard MIDI File
+    std::cout << "Exporting \033[1mfibonacci_score.mid\033[0m (Standard MIDI Format 1)... ";
+    aether::midi::MidiFile mf;
+    aether::midi::MidiTrack trk;
+    trk.name = "Fibonacci Non-Euclidean Sonata";
+
+    for (size_t i = 0; i < score.size(); ++i) {
+        const auto& ev = score[i];
+        uint8_t midi_note = static_cast<uint8_t>(60 + (i % 12));
+        uint8_t vel = static_cast<uint8_t>(ev.velocity * 127);
+        trk.events.push_back({240, 0x90, 0, midi_note, vel, {}});
+        trk.events.push_back({240, 0x80, 0, midi_note, 0, {}});
+    }
+    mf.tracks.push_back(std::move(trk));
+    const std::string midi_out = (fs::path(output_dir) / "fibonacci_score.mid").string();
+    if (mf.save(midi_out)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << midi_out << "\n\n";
     } else {
         std::cout << "\033[1;31m[FAILED]\033[0m\n\n";
     }
+}
+
+void run_live_interactive() {
+    std::cout << "\033[1;32m=== Initializing Real-Time Audio Hardware Device (Live TUI Synthesizer) ===\033[0m\n";
+    aether::Engine engine(48000);
+    aether::audio::PlaybackDevice audio_device(engine, 48000);
+
+    if (!audio_device.start()) {
+        std::cerr << "Failed to start audio playback hardware device.\n";
+        return;
+    }
+
+    std::cout << "\033[1;36m[LIVE SYNTHESIZER READY]\033[0m Audio streaming active at 48kHz stereo.\n";
+    std::cout << "Play with keyboard:\n";
+    std::cout << "  Notes     : \033[1m[A] [W] [S] [E] [D] [F] [T] [G] [Y] [H] [U] [J] [K]\033[0m\n";
+    std::cout << "  Presets   : \033[1m[1] Bell   [2] Gong   [3] Drone   [4] Aether\033[0m\n";
+    std::cout << "  Quit      : \033[1;31m[Q] or [ESC]\033[0m\n\n";
+
+    bool running = true;
+    while (running) {
+#if defined(_WIN32)
+        if (_kbhit()) {
+            int ch = _getch();
+            if (ch == 'q' || ch == 'Q' || ch == 27) {
+                running = false;
+                break;
+            }
+
+            switch (ch) {
+                case '1':
+                    engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+                    std::cout << "\r\033[K[PRESET]: Hyperbolic Cosmic Bell        ";
+                    break;
+                case '2':
+                    engine.load_preset(aether::Preset::ChladniPlateGong);
+                    std::cout << "\r\033[K[PRESET]: Chladni Plate Gong           ";
+                    break;
+                case '3':
+                    engine.load_preset(aether::Preset::ChaoticQuantumDrone);
+                    std::cout << "\r\033[K[PRESET]: Chaotic Quantum Drone        ";
+                    break;
+                case '4':
+                    engine.load_preset(aether::Preset::HyperbolicAetherSpace);
+                    std::cout << "\r\033[K[PRESET]: Hyperbolic Aether Space     ";
+                    break;
+
+                // Piano keys mapping to Bohlen-Pierce / Microtonal degrees
+                case 'a': case 'A': engine.note_on_degree(0, 0.9f); std::cout << "\r\033[K\033[36m>> Note C3 (Degree 0)\033[0m"; break;
+                case 'w': case 'W': engine.note_on_degree(1, 0.9f); std::cout << "\r\033[K\033[36m>> Note C#3 (Degree 1)\033[0m"; break;
+                case 's': case 'S': engine.note_on_degree(2, 0.9f); std::cout << "\r\033[K\033[36m>> Note D3 (Degree 2)\033[0m"; break;
+                case 'e': case 'E': engine.note_on_degree(3, 0.9f); std::cout << "\r\033[K\033[36m>> Note D#3 (Degree 3)\033[0m"; break;
+                case 'd': case 'D': engine.note_on_degree(4, 0.9f); std::cout << "\r\033[K\033[36m>> Note E3 (Degree 4)\033[0m"; break;
+                case 'f': case 'F': engine.note_on_degree(5, 0.9f); std::cout << "\r\033[K\033[36m>> Note F3 (Degree 5)\033[0m"; break;
+                case 't': case 'T': engine.note_on_degree(6, 0.9f); std::cout << "\r\033[K\033[36m>> Note F#3 (Degree 6)\033[0m"; break;
+                case 'g': case 'G': engine.note_on_degree(7, 0.9f); std::cout << "\r\033[K\033[36m>> Note G3 (Degree 7)\033[0m"; break;
+                case 'y': case 'Y': engine.note_on_degree(8, 0.9f); std::cout << "\r\033[K\033[36m>> Note G#3 (Degree 8)\033[0m"; break;
+                case 'h': case 'H': engine.note_on_degree(9, 0.9f); std::cout << "\r\033[K\033[36m>> Note A3 (Degree 9)\033[0m"; break;
+                case 'u': case 'U': engine.note_on_degree(10, 0.9f); std::cout << "\r\033[K\033[36m>> Note A#3 (Degree 10)\033[0m"; break;
+                case 'j': case 'J': engine.note_on_degree(11, 0.9f); std::cout << "\r\033[K\033[36m>> Note B3 (Degree 11)\033[0m"; break;
+                case 'k': case 'K': engine.note_on_degree(12, 0.9f); std::cout << "\r\033[K\033[36m>> Note C4 (Degree 12)\033[0m"; break;
+                case ' ':
+                    engine.note_on({(rand() % 100 - 50) / 70.0f, (rand() % 100 - 50) / 70.0f}, 0.95f);
+                    std::cout << "\r\033[K\033[1;33m>> Non-Euclidean Random Strike!\033[0m";
+                    break;
+            }
+            std::cout.flush();
+        }
+#endif
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    audio_device.stop();
+    std::cout << "\n[AUDIO SHUTDOWN COMPLETE]\n";
 }
 
 int main(int argc, char** argv) {
@@ -181,16 +285,28 @@ int main(int argc, char** argv) {
     bool do_bench = true;
     bool do_render = true;
     bool do_ascii = true;
+    bool do_live = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--help" || arg == "-h") {
+        if (arg == "--live" || arg == "-l") {
+            do_live = true;
+            do_bench = false;
+            do_render = false;
+            do_ascii = false;
+        } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: aether-dsp [options]\n";
+            std::cout << "  --live, -l       Launch live interactive synthesizer with audio hardware\n";
             std::cout << "  --bench          Run AVX2 SIMD DSP throughput benchmark\n";
-            std::cout << "  --render         Render lossless audio presets to output/*.wav\n";
+            std::cout << "  --render         Render lossless audio presets & MIDI to output/*\n";
             std::cout << "  --ascii          Display terminal ASCII Chladni nodal plate\n";
             return 0;
         }
+    }
+
+    if (do_live) {
+        run_live_interactive();
+        return 0;
     }
 
     if (do_ascii) {

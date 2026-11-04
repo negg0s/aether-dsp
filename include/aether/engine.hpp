@@ -4,6 +4,8 @@
 #include "ring_buffer.hpp"
 #include "dsp/biquad.hpp"
 #include "dsp/envelope.hpp"
+#include "dsp/tuning.hpp"
+#include "dsp/fx/hyperbolic_reverb.hpp"
 #include "engines/hyperbolic_waveguide.hpp"
 #include "engines/chladni_plate.hpp"
 #include "engines/chaotic_oscillator.hpp"
@@ -23,7 +25,8 @@ enum class Preset {
 /**
  * @brief Master AetherDSP Sound Synthesis Engine.
  *
- * Provides real-time block processing, parameter morphing, and preset orchestration.
+ * Provides real-time block processing, parameter morphing, microtonal scale tuning,
+ * and hyperbolic FDN reverberation.
  * Thread-safe for audio callbacks with strict zero-allocation real-time constraints.
  */
 class Engine {
@@ -37,6 +40,7 @@ public:
         filter_l_.configure(dsp::FilterType::Lowpass, 12000.0f, 0.707f, static_cast<float>(sample_rate_));
         filter_r_.configure(dsp::FilterType::Lowpass, 12000.0f, 0.707f, static_cast<float>(sample_rate_));
         env_.configure(0.005f, 0.8f, 0.0f, 1.5f, static_cast<float>(sample_rate_));
+        reverb_.configure(0.82f, 0.25f, 0.28f);
         load_preset(Preset::HyperbolicCosmicBell);
     }
 
@@ -47,18 +51,21 @@ public:
                 waveguide_.configure(0.48f, 0.0025f, 1.2f);
                 filter_l_.configure(dsp::FilterType::Lowpass, 14000.0f, 0.8f, static_cast<float>(sample_rate_));
                 filter_r_.configure(dsp::FilterType::Lowpass, 14000.0f, 0.8f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.85f, 0.25f, 0.32f);
                 break;
 
             case Preset::ChladniPlateGong:
                 chladni_.configure(180.0f, 1.15f, static_cast<float>(sample_rate_));
                 filter_l_.configure(dsp::FilterType::Lowpass, 9500.0f, 1.0f, static_cast<float>(sample_rate_));
                 filter_r_.configure(dsp::FilterType::Lowpass, 9500.0f, 1.0f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.88f, 0.35f, 0.25f);
                 break;
 
             case Preset::ChaoticQuantumDrone:
                 chaos_.configure(engines::AttractorType::Lorenz, 0.85f);
                 filter_l_.configure(dsp::FilterType::Lowpass, 4500.0f, 2.5f, static_cast<float>(sample_rate_));
                 filter_r_.configure(dsp::FilterType::Lowpass, 4500.0f, 2.5f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.92f, 0.15f, 0.40f);
                 break;
 
             case Preset::HyperbolicAetherSpace:
@@ -66,14 +73,13 @@ public:
                 chaos_.configure(engines::AttractorType::Clifford, 0.2f);
                 filter_l_.configure(dsp::FilterType::Lowpass, 11000.0f, 1.2f, static_cast<float>(sample_rate_));
                 filter_r_.configure(dsp::FilterType::Lowpass, 11000.0f, 1.2f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.90f, 0.20f, 0.35f);
                 break;
         }
     }
 
     /**
      * @brief Trigger note with excitation coordinates.
-     * @param strike_coord Coordinates inside [-1.0, 1.0] for Poincare disk or Chladni plate
-     * @param velocity Note impact velocity (0.0 to 1.0)
      */
     void note_on(Vec2 strike_coord = {0.2f, 0.3f}, float velocity = 0.85f) noexcept {
         env_.reset();
@@ -88,13 +94,24 @@ public:
         }
     }
 
+    /**
+     * @brief Trigger microtonal note degree via current tuning system.
+     */
+    void note_on_degree(int degree, float velocity = 0.85f, Vec2 strike_coord = {0.3f, 0.4f}) noexcept {
+        const float freq = tuning_.get_frequency(degree, 220.0f);
+        if (current_preset_ == Preset::ChladniPlateGong) {
+            chladni_.configure(freq, 1.15f, static_cast<float>(sample_rate_));
+        }
+        note_on(strike_coord, velocity);
+    }
+
     void note_off() noexcept {
         env_.gate(false);
     }
 
     /**
      * @brief Real-time audio rendering block process.
-     * ZERO heap allocation, strictly noexcept, sub-millisecond execution.
+     * ZERO heap allocation, strictly noexcept, AVX2-accelerated.
      */
     void process_block(std::span<StereoFrame> output) noexcept {
         for (auto& frame : output) {
@@ -117,7 +134,6 @@ public:
                 }
 
                 case Preset::HyperbolicAetherSpace: {
-                    // Continuous chaotic perturbation injected into Poincare disk
                     const auto chaos_mod = chaos_.step(static_cast<float>(sample_rate_));
                     if (chaos_step_count_++ % 32 == 0) {
                         const Vec2 perturb{chaos_mod.left * 0.3f, chaos_mod.right * 0.3f};
@@ -130,23 +146,28 @@ public:
                 }
             }
 
-            // Apply master biquad filter and envelope
-            const Sample fl = filter_l_.process(sample.left);
-            const Sample fr = filter_r_.process(sample.right);
+            // Master lowpass filter
+            sample.left = filter_l_.process(sample.left);
+            sample.right = filter_r_.process(sample.right);
 
-            // Soft-clipping saturation tanh approximation
+            // Hyperbolic FDN Reverb
+            sample = reverb_.process(sample);
+
+            // Soft-clipping saturation
             auto soft_clip = [](Sample x) noexcept -> Sample {
                 return std::clamp(x * (1.5f - 0.5f * x * x), -1.0f, 1.0f);
             };
 
-            frame.left = soft_clip(fl);
-            frame.right = soft_clip(fr);
+            frame.left = soft_clip(sample.left);
+            frame.right = soft_clip(sample.right);
         }
     }
 
     [[nodiscard]] engines::HyperbolicWaveguide& waveguide() noexcept { return waveguide_; }
     [[nodiscard]] engines::ChladniPlate& chladni() noexcept { return chladni_; }
     [[nodiscard]] engines::ChaoticOscillator& chaos() noexcept { return chaos_; }
+    [[nodiscard]] dsp::TuningSystem& tuning() noexcept { return tuning_; }
+    [[nodiscard]] dsp::fx::HyperbolicReverb& reverb() noexcept { return reverb_; }
     [[nodiscard]] uint32_t sample_rate() const noexcept { return sample_rate_; }
 
 private:
@@ -159,6 +180,8 @@ private:
     dsp::BiquadFilter filter_l_;
     dsp::BiquadFilter filter_r_;
     dsp::ADSREnvelope env_;
+    dsp::fx::HyperbolicReverb reverb_;
+    dsp::TuningSystem tuning_{dsp::TuningSystem::PredefinedScale::BohlenPierce};
 
     uint32_t chaos_step_count_{0};
 };

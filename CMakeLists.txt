@@ -23,6 +23,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 # Main Executable & Benchmark Suite
 add_executable(aether-dsp
     src/main.cpp
+    src/audio_device.cpp
 )
 
 # Test Suite Executable

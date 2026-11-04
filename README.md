@@ -3,7 +3,9 @@
 [![CI](https://github.com/negg0s/aether-dsp/actions/workflows/ci.yml/badge.svg)](https://github.com/negg0s/aether-dsp/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++20](https://img.shields.io/badge/Language-C%2B%2B20-00599C?logo=cplusplus)](https://en.cppreference.com/w/cpp/20)
-[![Platform](https://img.shields.io/badge/Platform-Cross--Platform%20%7C%20WebAssembly-brightgreen)](#)
+[![SIMD](https://img.shields.io/badge/SIMD-AVX2%20Fused%20Multiply--Add-blueviolet)](#)
+[![Audio](https://img.shields.io/badge/Audio-WASAPI%20%7C%20CoreAudio%20%7C%20ALSA%20%7C%20WebAudio-success)](#)
+[![MIDI](https://img.shields.io/badge/MIDI-SMF%20Format%200%2F1-yellow)](#)
 [![Zero-AI](https://img.shields.io/badge/Engine-100%25%20Pure%20Math%20%26%20DSP%20(No%20AI)-orange)](#)
 
 ```
@@ -14,26 +16,34 @@
 /_/  |_\___/\__/_/ /_/\___/_/     /_____//____/_/       
 ```
 
-**AetherDSP** is a high-performance, real-time physical modeling sound synthesis engine built in modern C++20. It combines **2D Non-Euclidean Hyperbolic Waveguide Acoustics** (Poincaré conformal disk manifolds) and **2D Kirchhoff-Love Thin Plate Modal Resonators** (Chladni cymatics) into a unified, zero-allocation audio architecture.
+**AetherDSP** is an ultra-high-performance, physical modeling sound synthesis engine built in modern C++20 with AVX2 SIMD acceleration. It combines **2D Non-Euclidean Hyperbolic Waveguide Acoustics** (Poincaré conformal disk manifolds), **2D Kirchhoff-Love Thin Plate Modal Resonators** (Chladni cymatics), **Microtonal Tuning Systems** (Bohlen-Pierce), and **Unitary Hyperbolic FDN Reverb** into a unified, zero-allocation real-time audio architecture.
 
 Unlike standard physical modeling synthesizers constrained to 1D strings (Karplus-Strong) or rectangular Euclidean rooms, AetherDSP solves acoustic wave propagation on curved Riemannian geometries ($K = -1$) and thin plate biharmonic surfaces, generating shimmering, inharmonic timbres that cannot exist in standard 3D Euclidean space.
 
 ---
 
-## Key Features
+## Key Highlights
 
 - **2D Non-Euclidean Hyperbolic Waveguide (Poincaré Disk):**
   Solves the 2D wave equation on a Riemannian manifold with constant negative Gaussian curvature $K = -1$ using Finite-Difference Time-Domain (FDTD). Wavefronts expand exponentially towards the horocycle boundary without modal flutter.
+- **AVX2 SIMD Vectorized FDTD Kernel:**
+  Processes 8 spatial grid cells per instruction using 8-wide vectorized fused multiply-add (`_mm256_fmadd_ps`) operations.
 - **2D Modal Cymatics Plate (Kirchhoff-Love Thin Elastic Plate):**
   Calculates the analytical biharmonic eigenmode lattice of vibrating thin plates with customizable stiffness and Poisson ratios. Computes exact nodal lines ($u(x,y) = 0$) where sand accumulates in real-time.
-- **Continuous Strange Attractor Modulators:**
-  Integrates non-linear 3D dynamical systems (Lorenz, Rössler, Clifford) using 4th-order Runge-Kutta (RK4) to generate evolving organic harmonic perturbations without random number generators or neural networks.
+- **Microtonal Tuning Engine (Bohlen-Pierce & Scala .scl Support):**
+  Non-Euclidean scales dividing the tritave (3:1) into 13 equal steps, perfectly matching the inharmonic mode distribution of 2D circular/square plates. Includes full Scala `.scl` file parsing.
+- **Hyperbolic Feedback Delay Network (FDN) Reverb:**
+  4-channel unitary Householder feedback matrix with mutually prime delay lines derived from the $\{7, 3\}$ hyperbolic heptagonal tessellation.
+- **Standard MIDI File (SMF 0/1) Engine:**
+  Zero-dependency binary parser and serializer for `.mid` files. Export and sequence scores directly into digital audio workstations (DAWs).
+- **Live Real-Time Audio Hardware Streaming:**
+  Low-latency hardware audio device streaming via `miniaudio` (WASAPI, CoreAudio, ALSA, PulseAudio, WebAudio).
 - **Strict Real-Time Safety Guarantees:**
   - **Zero Dynamic Allocations (`malloc`/`new`)** inside the block processing loop.
   - **Lock-Free, Wait-Free SPSC Ring Buffer** with cache-line padding (`hardware_destructive_interference_size`) to prevent false sharing.
   - Header-only core architecture with `noexcept` specifications.
-- **Cross-Platform & Web-Ready:**
-  Zero OS-specific dependencies (no Win32 or Linux kernel requirements). Compiles on Windows, macOS, Linux, and WebAssembly (WASM). Includes a standalone interactive HTML5/Canvas visualizer.
+- **Interactive 3D Web Visualizer:**
+  Standalone browser app featuring 3D isometric plate topography, 6,000 sand particle cymatics physics, Poincaré disk ripples, and a real-time FFT spectrum & oscilloscope.
 
 ---
 
@@ -75,11 +85,13 @@ $$w_{m,n}(x,y) = \cos\left(\frac{m\pi x}{L}\right)\cos\left(\frac{n\pi y}{L}\rig
 
 ## Live Interactive Web Visualizer
 
-Open [`web/index.html`](web/index.html) directly in any modern browser (or serve via GitHub Pages):
+Open [`web/index.html`](web/index.html) directly in any modern browser:
 
 - **Poincaré Waveguide Canvas:** Click anywhere inside the unit disk to strike non-Euclidean space and observe real-time wavefront divergence.
-- **Chladni Plate Sand Simulation:** 5,000 live sand particles move dynamically across the vibrating plate, kicked away by antinodes and gathering strictly onto geometric nodal lines.
-- **Web Audio Engine:** Real-time modal and chaotic audio synthesis running natively via the Web Audio API.
+- **Chladni Plate Sand Simulation:** 6,000 live sand particles move dynamically across the vibrating plate, kicked away by antinodes and gathering strictly onto geometric nodal lines.
+- **3D Isometric Heightfield:** Live 3D perspective wireframe showing the physical deformation of the vibrating plate.
+- **Web Audio Engine & FFT Scope:** Real-time modal and chaotic audio synthesis running natively via Web Audio API with a live oscilloscope and frequency spectrum analyzer.
+- **Virtual Piano & Computer Hotkeys:** Play notes using computer keys (`A`, `W`, `S`, `E`, `D`, `F`, `T`, `G`, `Y`, `H`, `U`, `J`, `K`).
 
 ---
 
@@ -108,29 +120,34 @@ ctest --test-dir build --output-on-failure
 
 ---
 
-## CLI & Benchmark Usage
+## CLI Usage
 
-Run the compiled executable to display terminal ASCII cymatics, benchmark engine throughput, and render 32-bit float lossless WAV presets:
+### Interactive Live Synthesizer (Audio Hardware Playback)
+Stream directly to your speakers or headphones with sub-millisecond latency:
+```bash
+./build/aether-dsp --live
+```
+```text
+Play with keyboard:
+  Notes     : [A] [W] [S] [E] [D] [F] [T] [G] [Y] [H] [U] [J] [K]
+  Presets   : [1] Bell   [2] Gong   [3] Drone   [4] Aether
+  Quit      : [Q] or [ESC]
+```
 
+### Benchmark & Batch WAV/MIDI Rendering
 ```bash
 ./build/aether-dsp
 ```
 
-### Options
-```text
-Usage: aether-dsp [options]
-  --bench          Run nanosecond-resolution DSP throughput benchmark
-  --render         Render lossless audio presets to output/*.wav
-  --ascii          Display live terminal ASCII Chladni nodal plate
-```
-
-### Rendered Presets (Saved to `output/`)
-| Preset | Waveform / Algorithm | Character |
+### Rendered Files (Saved to `output/`)
+| File | Format | Character |
 | :--- | :--- | :--- |
-| `01_hyperbolic_cosmic_bell.wav` | 2D Poincaré FDTD Waveguide | Ethereal metallic chime with exponential dispersion |
-| `02_chladni_plate_gong.wav` | Kirchhoff-Love Thin Plate Modal Lattice | Heavy acoustic gong with rich inharmonic partials |
-| `03_chaotic_quantum_drone.wav` | Lorenz Strange Attractor State-Space | Evolving deterministic sub-harmonic drone |
-| `04_hyperbolic_aether_space.wav` | Hyperbolic Waveguide + Chaotic Perturbation | Shimmering cosmic acoustic field |
+| `01_hyperbolic_cosmic_bell.wav` | 32-bit Float WAV | Ethereal metallic chime with exponential dispersion |
+| `02_chladni_plate_gong.wav` | 32-bit Float WAV | Heavy acoustic gong with rich inharmonic partials |
+| `03_chaotic_quantum_drone.wav` | 32-bit Float WAV | Evolving deterministic sub-harmonic drone |
+| `04_hyperbolic_aether_space.wav` | 32-bit Float WAV | Shimmering cosmic acoustic field |
+| `05_fibonacci_non_euclidean_sonata.wav` | 32-bit Float WAV | Algorithmic polyphonic sonata based on Fibonacci & Xenakis sieve |
+| `fibonacci_score.mid` | Standard MIDI Format 1 | Exported polyphonic score ready for DAW import (Ableton/FL Studio) |
 
 ---
 
@@ -142,24 +159,34 @@ aether-dsp/
 │   ├── types.hpp                  # Sample representations, 2D/3D vectors, stereo frames
 │   ├── ring_buffer.hpp            # Lock-free, wait-free SPSC ring buffer (cache-line aligned)
 │   ├── wav_writer.hpp             # Lossless RIFF WAV exporter (32-bit float / 24-bit PCM)
-│   ├── engine.hpp                 # Master engine orchestrator & voice allocator
+│   ├── engine.hpp                 # Master engine orchestrator, voices & FDN reverb
+│   ├── audio/
+│   │   ├── miniaudio.h            # Single-header cross-platform audio hardware driver
+│   │   └── playback_device.hpp    # Low-latency audio streaming wrapper
+│   ├── midi/
+│   │   └── midi_file.hpp          # Standard MIDI File (SMF 0/1) binary parser & exporter
 │   ├── math/
 │   │   ├── poincare.hpp           # Riemannian metric, conformal factors, geodesic distance
-│   │   └── runge_kutta.hpp        # 4th-order Runge-Kutta ODE numerical solver
+│   │   ├── runge_kutta.hpp        # 4th-order Runge-Kutta ODE numerical solver
+│   │   └── algorithmic_composer.hpp # Xenakis Sieve & Fibonacci score generator
 │   ├── dsp/
 │   │   ├── biquad.hpp             # Direct Form II Transposed biquad filter
-│   │   └── envelope.hpp           # Sample-accurate exponential ADSR envelope
+│   │   ├── envelope.hpp           # Sample-accurate exponential ADSR envelope
+│   │   ├── tuning.hpp             # Microtonal tuning engine (Bohlen-Pierce & Scala .scl)
+│   │   └── fx/
+│   │       └── hyperbolic_reverb.hpp # 4-channel unitary Householder FDN reverb
 │   └── engines/
-│       ├── hyperbolic_waveguide.hpp # 2D Non-Euclidean FDTD hyperbolic wave solver
+│       ├── hyperbolic_waveguide.hpp # AVX2 SIMD Non-Euclidean FDTD hyperbolic wave solver
 │       ├── chladni_plate.hpp        # Kirchhoff-Love 2D thin plate modal synthesizer
 │       └── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
 ├── src/
-│   └── main.cpp                   # CLI benchmark, terminal cymatics, audio generator
+│   ├── main.cpp                   # CLI benchmark, live hardware audio, MIDI exporter
+│   └── audio_device.cpp           # Miniaudio hardware backend compilation unit
 ├── tests/
-│   └── unit_tests.cpp             # Mathematical invariants and stability test suite
+│   └── unit_tests.cpp             # 8 extended mathematical invariants & audio stability tests
 ├── web/
-│   ├── index.html                 # Standalone interactive browser GUI
-│   └── app.js                     # HTML5 Canvas visualizer & Web Audio synthesizer
+│   ├── index.html                 # Standalone interactive browser GUI & 3D wireframe
+│   └── app.js                     # 3D Canvas visualizer, sand physics & Web Audio synth
 └── CMakeLists.txt
 ```
 
