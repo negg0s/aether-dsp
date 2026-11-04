@@ -1,0 +1,27 @@
+# Build directories
+build/
+build_rel/
+bin/
+obj/
+out/
+CMakeFiles/
+CMakeCache.txt
+*.ninja
+.ninja_*
+
+# IDEs
+.vs/
+.vscode/
+*.sln
+*.vcxproj
+*.user
+.idea/
+
+# OS artifacts
+Thumbs.db
+.DS_Store
+
+# Output binaries and audio (optional to keep or gitignore)
+*.exe
+*.pdb
+*.ilk

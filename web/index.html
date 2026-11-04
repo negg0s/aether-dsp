@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AetherDSP: Non-Euclidean Waveguide & Cymatics Synthesizer</title>
+    <style>
+        :root {
+            --bg: #0a0c10;
+            --surface: #141720;
+            --primary: #00f0ff;
+            --secondary: #ff0077;
+            --accent: #ffd700;
+            --text: #e0e6ed;
+            --text-dim: #707e94;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 24px;
+            overflow-x: hidden;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+            max-width: 900px;
+        }
+
+        h1 {
+            font-family: var(--font-mono);
+            font-size: 2.2rem;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        p.subtitle {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+            background: var(--surface);
+            padding: 14px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            align-items: center;
+            justify-content: center;
+        }
+
+        button.btn {
+            background: #1e2433;
+            color: var(--text);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button.btn:hover {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
+        }
+
+        button.btn.active {
+            background: var(--primary);
+            color: #000;
+            font-weight: bold;
+        }
+
+        .viewport-container {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            flex: 1;
+            min-width: 380px;
+            max-width: 540px;
+        }
+
+        .card-title {
+            font-family: var(--font-mono);
+            font-size: 1.05rem;
+            color: var(--primary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-desc {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        canvas {
+            border-radius: 12px;
+            background: #000;
+            cursor: crosshair;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            max-width: 480px;
+        }
+
+        .status-bar {
+            margin-top: 20px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--accent);
+            text-align: center;
+        }
+
+        footer {
+            margin-top: 36px;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            text-align: center;
+            font-family: var(--font-mono);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>AETHER-DSP</h1>
+        <p class="subtitle">
+            Non-Euclidean Hyperbolic Waveguide & Modal Cymatics Acoustic Synthesis Engine (Pure Math & DSP, Zero AI)
+        </p>
+    </header>
+
+    <div class="controls">
+        <span style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-dim);">PRESETS:</span>
+        <button class="btn active" id="btn-p1">Hyperbolic Cosmic Bell</button>
+        <button class="btn" id="btn-p2">Chladni Nodal Gong</button>
+        <button class="btn" id="btn-p3">Chaotic Lorenz Drone</button>
+        <button class="btn" id="btn-p4">Non-Euclidean Aether</button>
+        <button class="btn" id="btn-strike" style="border-color: var(--accent); color: var(--accent);">⚡ STRIKE (Space)</button>
+    </div>
+
+    <div class="viewport-container">
+        <!-- Poincare Disk View -->
+        <div class="card">
+            <div class="card-title">
+                <span>🌌</span> Poincaré Hyperbolic Waveguide (K = -1)
+            </div>
+            <div class="card-desc">
+                Click inside the unit disk to strike non-Euclidean space. Watch exponential wave divergence.
+            </div>
+            <canvas id="canvas-poincare" width="480" height="480"></canvas>
+        </div>
+
+        <!-- Chladni Plate View -->
+        <div class="card">
+            <div class="card-title">
+                <span>🔬</span> 2D Chladni Nodal Plate (Sand Cymatics)
+            </div>
+            <div class="card-desc">
+                Click plate to strike. 6,000 sand particles migrate into nodal lines where u(x,y) = 0.
+            </div>
+            <canvas id="canvas-chladni" width="480" height="480"></canvas>
+        </div>
+    </div>
+
+    <div class="status-bar" id="status-info">
+        [AUDIO ENGINE]: Click anywhere or press SPACE to unlock Web Audio & Strike.
+    </div>
+
+    <footer>
+        Developed by <strong>negg0s (Emir)</strong> | Powered by C++20 Core & Web Audio API
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
