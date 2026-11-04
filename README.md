@@ -9,7 +9,7 @@
 [![CLAP](https://img.shields.io/badge/Plugin-CLAP%20Native%20Standard-red)](#)
 [![Audio](https://img.shields.io/badge/Audio-WASAPI%20%7C%20CoreAudio%20%7C%20ALSA%20%7C%20WebAudio-success)](#)
 [![MIDI](https://img.shields.io/badge/MIDI-SMF%20Format%200%2F1-yellow)](#)
-[![Tests](https://img.shields.io/badge/Tests-28%20Invariant%20Tests%20Passed-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/Tests-31%20Invariant%20Tests%20Passed-brightgreen)](#)
 [![Zero-AI](https://img.shields.io/badge/Engine-100%25%20Pure%20Math%20%26%20DSP%20(No%20AI)-orange)](#)
 
 ```
@@ -46,6 +46,12 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
   Models non-integrable stellar orbits in an axisymmetric galactic gravitational potential $V(x,y) = \frac{1}{2}(x^2+y^2) + x^2 y - \frac{1}{3}y^3$. Accurately renders chaotic orbits and Kolmogorov–Arnold–Moser (KAM) invariant tori.
 - **8-Voice Zero-Allocation Polyphonic Voice Manager:**
   Real-time polyphonic voice allocation with deterministic Least-Recently-Used (LRU) voice stealing, microtonal scale mapping, and soft dynamic headroom normalization for dense chords.
+- **Nonlinear Stiff Kirchhoff String with Hyperbolic Jawari Bridge:**
+  1D FDTD solver for the nonlinear Kirchhoff wave equation with dynamic tension modulation and bilateral unilateral contact with a curved hyperbolic bridge obstacle (the iconic buzzing sitar/tanpura "Jawari" harmonic bloom).
+- **3D Non-Euclidean Poincaré Ball ($\mathbb{H}^3$) Acoustic Spatializer:**
+  Sound propagation on a 3D Riemannian manifold of constant negative Gaussian curvature $K = -1$. Models exponential acoustic wavefront expansion ($I \propto 1 / \sinh^2(d_H)$) and Woodworth spherical head binaural shadowing.
+- **In-Place Radix-2 Cooley-Tukey FFT & Spectral Power Analyzer:**
+  Zero-allocation $O(N \log N)$ Fast Fourier Transform engine with in-place bit-reversal permutation, Hann/Hamming/Blackman-Harris windowing, and single-sided power spectral density calculation.
 - **Terminal Unicode Braille Phase Space & 2D Spectrogram:**
   High-resolution sub-pixel graphics engine inside standard terminals using Unicode Braille Patterns (U+2800..U+28FF) for 30 FPS rolling oscilloscopes, dynamic TrueColor stereo VU meters (`--play <wav>`), 2D Time-Frequency spectral waterfalls (`--spectrogram <wav>`), and 2D symplectic phase space orbits (`--phase-space`).
 - **Stribeck Stick-Slip Non-Linear Friction Exciter:**
@@ -198,6 +204,8 @@ Drive the Poincaré hyperbolic waveguide with any external audio sample:
 | `11_pseudosphere_tractrix_horn.wav` | 32-bit Float WAV | Beltrami Pseudosphere tractrix horn Webster acoustic transmission flare |
 | `12_henon_heiles_galactic_chaos.wav` | 32-bit Float WAV | Astrophysical galactic Hamiltonian chaos integrated with 4th-order Yoshida method |
 | `13_polyphonic_microtonal_cathedral.wav` | 32-bit Float WAV | 8-Voice polyphonic Bohlen-Pierce microtonal chord progression on Chladni resonators |
+| `14_sitar_hyperbolic_jawari.wav` | 32-bit Float WAV | Nonlinear stiff Kirchhoff string with dynamic tension modulation & buzzing Jawari bridge |
+| `15_hyperbolic_ball_3d_spatial.wav` | 32-bit Float WAV | 3D Poincaré Ball (H^3) non-Euclidean binaural orbit with exponential horizon dropoff |
 | `fibonacci_score.mid` | Standard MIDI Format 1 | Exported polyphonic score ready for DAW import (Ableton/FL Studio) |
 | `chladni_nodal_lines.svg` | Scalable Vector Graphics | 800x800 high-res vector visualization of Chladni nodal plate |
 | `poincare_tiling.svg` | Scalable Vector Graphics | 800x800 high-res vector art of Poincaré {7,3} hyperbolic tessellation |
@@ -230,6 +238,7 @@ aether-dsp/
 │   ├── math/
 │   │   ├── poincare.hpp           # Riemannian metric, conformal factors, geodesic distance
 │   │   ├── runge_kutta.hpp        # 4th-order Runge-Kutta ODE numerical solver
+│   │   ├── fft.hpp                # Radix-2 Cooley-Tukey FFT & spectral power estimation
 │   │   ├── hyperbolic_tiling.hpp  # Non-Euclidean {7, 3} & {5, 4} tessellation generator
 │   │   ├── hyperbolic_halfplane.hpp # Upper Half-Plane H^2, Cayley map & SL(2, Z) Mobius
 │   │   ├── geodesic_raytracer.hpp # Hamiltonian geodesic sound ray tracer on curved manifolds
@@ -243,12 +252,14 @@ aether-dsp/
 │   │   └── fx/
 │   │       ├── hyperbolic_reverb.hpp # 4-channel unitary Householder FDN reverb
 │   │       ├── convolution_reverb.hpp# Time-domain convolution for Manifold Impulse Responses
-│   │       └── binaural_panner.hpp   # 3D Woodworth spherical head binaural spatializer
+│   │       ├── binaural_panner.hpp   # 3D Woodworth spherical head binaural spatializer
+│   │       └── hyperbolic_spatializer_3d.hpp # 3D Poincare Ball (H^3) acoustic spatializer
 │   └── engines/
 │       ├── hyperbolic_waveguide.hpp # AVX2 SIMD Non-Euclidean FDTD hyperbolic wave solver
 │       ├── chladni_plate.hpp        # Kirchhoff-Love 2D thin plate modal synthesizer
 │       ├── von_karman_plate.hpp     # Nonlinear large-deflection plate with shimmering crescendo
 │       ├── pseudosphere_horn.hpp    # Beltrami pseudosphere tractrix Webster acoustic horn
+│       ├── hyperbolic_string.hpp    # Nonlinear stiff string with tension modulation & Jawari bridge
 │       ├── stick_slip_exciter.hpp   # Stribeck non-linear friction stick-slip continuous exciter
 │       ├── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
 │       └── hamiltonian_chaos.hpp    # Hénon-Heiles galactic gravitational chaos oscillator
@@ -260,7 +271,7 @@ aether-dsp/
 │   ├── audio_device.cpp           # Miniaudio hardware backend compilation unit
 │   └── c_api.cpp                  # C-ABI implementation
 ├── tests/
-│   └── unit_tests.cpp             # 28 extended mathematical invariants & audio stability tests
+│   └── unit_tests.cpp             # 31 extended mathematical invariants & audio stability tests
 ├── examples/
 │   ├── python_demo.py             # Python ctypes zero-dependency integration demo
 │   └── spectral_analysis.py       # Pure-Python physical inharmonicity & DFT spectral analyzer

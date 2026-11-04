@@ -18,6 +18,8 @@
 #include "aether/dsp/scala_catalog.hpp"
 #include "aether/dsp/fx/binaural_panner.hpp"
 #include "aether/engines/hamiltonian_chaos.hpp"
+#include "aether/engines/hyperbolic_string.hpp"
+#include "aether/dsp/fx/hyperbolic_spatializer_3d.hpp"
 #include "aether/polyphony.hpp"
 #include <iostream>
 #include <chrono>
@@ -528,6 +530,64 @@ void render_all_presets(const std::string& output_dir) {
     const std::string poly_path = (fs::path(final_out_dir) / "13_polyphonic_microtonal_cathedral.wav").string();
     if (aether::WavWriter::write_stereo_wav(poly_path, poly_frames, SAMPLE_RATE, true)) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << poly_path << "\n";
+    }
+
+    // Render 14: Nonlinear Stiff Kirchhoff String with Hyperbolic Jawari Bridge
+    std::cout << "Rendering \033[1m14_sitar_hyperbolic_jawari.wav\033[0m (Nonlinear Stiff String & Jawari Bridge)... ";
+    std::cout.flush();
+    aether::engines::HyperbolicString sitar_string(SAMPLE_RATE);
+    sitar_string.set_pitch(146.83f); // D3
+    sitar_string.pluck(0.22f, 0.95f, 0.08f);
+
+    constexpr size_t SITAR_SAMPLES = SAMPLE_RATE * 4;
+    std::vector<aether::StereoFrame> sitar_frames(SITAR_SAMPLES);
+    for (size_t s = 0; s < SITAR_SAMPLES; ++s) {
+        if (s == SAMPLE_RATE * 1 || s == SAMPLE_RATE * 2 + SAMPLE_RATE / 2) {
+            sitar_string.pluck(0.28f, 0.8f, 0.06f);
+        }
+        sitar_frames[s] = sitar_string.step();
+    }
+    const std::string sitar_path = (fs::path(final_out_dir) / "14_sitar_hyperbolic_jawari.wav").string();
+    if (aether::WavWriter::write_stereo_wav(sitar_path, sitar_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << sitar_path << "\n";
+    }
+
+    // Render 15: 3D Poincaré Ball (H^3) Non-Euclidean Binaural Orbit
+    std::cout << "Rendering \033[1m15_hyperbolic_ball_3d_spatial.wav\033[0m (3D Poincare Ball H^3 Acoustics)... ";
+    std::cout.flush();
+    aether::Engine bell_engine(SAMPLE_RATE);
+    bell_engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+    aether::dsp::fx::HyperbolicSpatializer3D spat3d(SAMPLE_RATE);
+
+    constexpr size_t SPAT3D_SAMPLES = SAMPLE_RATE * 6;
+    std::vector<aether::StereoFrame> spat3d_frames(SPAT3D_SAMPLES);
+    std::vector<aether::StereoFrame> dry_block(BLOCK_SIZE);
+
+    for (size_t i = 0; i < SPAT3D_SAMPLES; i += BLOCK_SIZE) {
+        if (i % (SAMPLE_RATE + SAMPLE_RATE / 4) == 0) {
+            bell_engine.note_on({0.25f, 0.35f}, 0.9f);
+        }
+
+        const float progress = static_cast<float>(i) / SPAT3D_SAMPLES;
+        const float theta = progress * 4.0f * std::numbers::pi_v<float>;
+        const float r = 0.30f + 0.55f * std::sin(progress * std::numbers::pi_v<float>);
+        const float sx = r * std::cos(theta);
+        const float sy = r * std::sin(theta);
+        const float sz = 0.25f * std::sin(theta * 2.0f);
+
+        spat3d.set_source_position({sx, sy, sz}, {0.0f, 0.0f, 0.0f});
+
+        const size_t to_render = std::min(BLOCK_SIZE, SPAT3D_SAMPLES - i);
+        bell_engine.process_block(std::span<aether::StereoFrame>(dry_block.data(), to_render));
+
+        for (size_t s = 0; s < to_render; ++s) {
+            const float mono = (dry_block[s].left + dry_block[s].right) * 0.5f;
+            spat3d_frames[i + s] = spat3d.process(mono);
+        }
+    }
+    const std::string spat3d_path = (fs::path(final_out_dir) / "15_hyperbolic_ball_3d_spatial.wav").string();
+    if (aether::WavWriter::write_stereo_wav(spat3d_path, spat3d_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << spat3d_path << "\n";
     }
 
     // Export Standard MIDI File

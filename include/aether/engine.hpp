@@ -14,6 +14,8 @@
 #include "engines/von_karman_plate.hpp"
 #include "engines/pseudosphere_horn.hpp"
 #include "engines/hamiltonian_chaos.hpp"
+#include "engines/hyperbolic_string.hpp"
+#include "dsp/fx/hyperbolic_spatializer_3d.hpp"
 #include "polyphony.hpp"
 #include <span>
 #include <string_view>
@@ -29,7 +31,8 @@ enum class Preset {
     BowedCrystalPlate,       // Continuous Stribeck stick-slip friction bowed elastic plate
     VonKarmanTurbulentGong,  // Nonlinear thin plate large-deflection Duffing pitch glide & shimmering crescendo
     PseudosphereTractrixHorn,// Beltrami pseudosphere tractrix horn Webster flare solver with lip-reed excitation
-    HenonHeilesChaos         // Galactic axisymmetric gravitational Hamiltonian chaos with 4th-order Yoshida integration
+    HenonHeilesChaos,        // Galactic axisymmetric gravitational Hamiltonian chaos with 4th-order Yoshida integration
+    HyperbolicStringJawari   // Nonlinear stiff Kirchhoff string with tension modulation & buzzing jawari obstacle
 };
 
 /**
@@ -45,7 +48,9 @@ public:
         : sample_rate_(sample_rate),
           von_karman_(sample_rate),
           pseudosphere_(sample_rate),
-          polyphony_(sample_rate) {
+          polyphony_(sample_rate),
+          string_(sample_rate),
+          spatializer3d_(sample_rate) {
         init();
     }
 
@@ -118,6 +123,14 @@ public:
                 filter_r_.configure(dsp::FilterType::Lowpass, 5500.0f, 1.8f, static_cast<float>(sample_rate_));
                 reverb_.configure(0.90f, 0.18f, 0.38f);
                 break;
+
+            case Preset::HyperbolicStringJawari:
+                string_.reset();
+                string_.set_pitch(146.83f);
+                filter_l_.configure(dsp::FilterType::Lowpass, 18000.0f, 0.707f, static_cast<float>(sample_rate_));
+                filter_r_.configure(dsp::FilterType::Lowpass, 18000.0f, 0.707f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.80f, 0.22f, 0.28f);
+                break;
         }
     }
 
@@ -147,6 +160,10 @@ public:
         if (current_preset_ == Preset::HenonHeilesChaos) {
             henon_heiles_.reset(0.11 + 0.045 * std::clamp(velocity, 0.1f, 1.0f));
         }
+
+        if (current_preset_ == Preset::HyperbolicStringJawari) {
+            string_.pluck(strike_coord.x * 0.4f + 0.5f, velocity, 0.08f);
+        }
     }
 
     /**
@@ -158,6 +175,8 @@ public:
             chladni_.configure(freq, 1.15f, static_cast<float>(sample_rate_));
         } else if (current_preset_ == Preset::VonKarmanTurbulentGong) {
             von_karman_.init_modes(freq * 0.5f, 1.2f, 0.7f);
+        } else if (current_preset_ == Preset::HyperbolicStringJawari) {
+            string_.set_pitch(freq);
         }
         note_on(strike_coord, velocity);
     }
@@ -247,6 +266,11 @@ public:
                     sample = henon_heiles_.step(static_cast<float>(sample_rate_));
                     break;
                 }
+
+                case Preset::HyperbolicStringJawari: {
+                    sample = string_.step();
+                    break;
+                }
             }
 
             // Mix in active polyphonic chord voices if any
@@ -277,6 +301,8 @@ public:
     [[nodiscard]] engines::VonKarmanPlate& von_karman() noexcept { return von_karman_; }
     [[nodiscard]] engines::PseudosphereHorn& pseudosphere() noexcept { return pseudosphere_; }
     [[nodiscard]] engines::HenonHeilesOscillator& henon_heiles() noexcept { return henon_heiles_; }
+    [[nodiscard]] engines::HyperbolicString& string() noexcept { return string_; }
+    [[nodiscard]] dsp::fx::HyperbolicSpatializer3D& spatializer3d() noexcept { return spatializer3d_; }
     [[nodiscard]] PolyphonyManager<8>& polyphony() noexcept { return polyphony_; }
     [[nodiscard]] dsp::TuningSystem& tuning() noexcept { return tuning_; }
     [[nodiscard]] dsp::fx::HyperbolicReverb& reverb() noexcept { return reverb_; }
@@ -293,6 +319,8 @@ private:
     engines::VonKarmanPlate von_karman_;
     engines::PseudosphereHorn pseudosphere_;
     engines::HenonHeilesOscillator henon_heiles_;
+    engines::HyperbolicString string_;
+    dsp::fx::HyperbolicSpatializer3D spatializer3d_;
     PolyphonyManager<8> polyphony_;
 
     dsp::BiquadFilter filter_l_;

@@ -27,6 +27,9 @@
 #include "aether/c_api.h"
 #include "aether/polyphony.hpp"
 #include "aether/engines/hamiltonian_chaos.hpp"
+#include "aether/engines/hyperbolic_string.hpp"
+#include "aether/dsp/fx/hyperbolic_spatializer_3d.hpp"
+#include "aether/math/fft.hpp"
 #include "aether/engine.hpp"
 #include <iostream>
 #include <cassert>
@@ -555,7 +558,7 @@ void test_henon_heiles_chaos() {
 }
 
 void test_engine_presets() {
-    std::cout << "[TEST] Master Engine 8-Preset Audio Rendering... ";
+    std::cout << "[TEST] Master Engine 9-Preset Audio Rendering... ";
     aether::Engine engine(48000);
     std::vector<aether::StereoFrame> block(256);
 
@@ -567,7 +570,8 @@ void test_engine_presets() {
         aether::Preset::BowedCrystalPlate,
         aether::Preset::VonKarmanTurbulentGong,
         aether::Preset::PseudosphereTractrixHorn,
-        aether::Preset::HenonHeilesChaos
+        aether::Preset::HenonHeilesChaos,
+        aether::Preset::HyperbolicStringJawari
     };
 
     for (auto preset : presets) {
@@ -592,8 +596,99 @@ void test_engine_presets() {
     std::cout << "PASSED\n";
 }
 
+void test_fft_spectral_transform() {
+    std::cout << "[TEST] Radix-2 Cooley-Tukey FFT & Parseval Invariant... ";
+    using aether::math::FFT;
+    constexpr size_t N = 128;
+    std::vector<std::complex<float>> data(N);
+
+    // Test Dirac delta impulse roundtrip
+    data[0] = {1.0f, 0.0f};
+    for (size_t i = 1; i < N; ++i) data[i] = {0.0f, 0.0f};
+
+    FFT::forward(data);
+    for (size_t k = 0; k < N; ++k) {
+        assert(std::abs(std::abs(data[k]) - 1.0f) < 1e-5f);
+    }
+
+    FFT::inverse(data);
+    assert(std::abs(data[0].real() - 1.0f) < 1e-5f);
+    for (size_t i = 1; i < N; ++i) {
+        assert(std::abs(data[i]) < 1e-5f);
+    }
+
+    // Test Parseval's energy theorem on synthetic tone
+    std::vector<float> time_signal(N);
+    for (size_t n = 0; n < N; ++n) {
+        time_signal[n] = std::sin(2.0f * std::numbers::pi_v<float> * 4.0f * n / N);
+    }
+
+    std::vector<float> power_spec(N / 2 + 1);
+    FFT::compute_power_spectrum(time_signal, power_spec, aether::math::WindowType::Rectangular);
+
+    // Peak bin must be at index k = 4
+    size_t peak_bin = 0;
+    float max_p = 0.0f;
+    for (size_t k = 0; k < power_spec.size(); ++k) {
+        if (power_spec[k] > max_p) {
+            max_p = power_spec[k];
+            peak_bin = k;
+        }
+    }
+    assert(peak_bin == 4);
+    std::cout << "PASSED\n";
+}
+
+void test_hyperbolic_string_jawari() {
+    std::cout << "[TEST] Nonlinear Stiff Kirchhoff-Jawari String... ";
+    aether::engines::HyperbolicString string(48000);
+    string.pluck(0.25f, 0.9f);
+
+    float total_energy = 0.0f;
+    for (int step = 0; step < 2000; ++step) {
+        auto frame = string.step();
+        assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+        assert(!std::isinf(frame.left) && !std::isinf(frame.right));
+        assert(std::abs(frame.left) <= 1.0f && std::abs(frame.right) <= 1.0f);
+        total_energy += std::abs(frame.left) + std::abs(frame.right);
+    }
+    assert(total_energy > 0.05f);
+    std::cout << "PASSED\n";
+}
+
+void test_hyperbolic_spatializer_3d() {
+    std::cout << "[TEST] 3D Poincare Ball (H^3) Spatializer & Metric... ";
+    using aether::dsp::fx::HyperbolicSpatializer3D;
+
+    HyperbolicSpatializer3D::Position3D p0{0.0f, 0.0f, 0.0f};
+    HyperbolicSpatializer3D::Position3D p1{0.5f, 0.0f, 0.0f};
+    HyperbolicSpatializer3D::Position3D p2{0.0f, 0.5f, 0.0f};
+
+    // Metric identity: d_H(p, p) == 0
+    assert(std::abs(HyperbolicSpatializer3D::geodesic_distance(p0, p0)) < 1e-5f);
+
+    // Symmetry: d_H(p0, p1) == d_H(p1, p0)
+    const float d01 = HyperbolicSpatializer3D::geodesic_distance(p0, p1);
+    const float d10 = HyperbolicSpatializer3D::geodesic_distance(p1, p0);
+    assert(std::abs(d01 - d10) < 1e-5f);
+
+    // Triangle inequality: d_H(p1, p2) <= d_H(p1, p0) + d_H(p0, p2)
+    const float d12 = HyperbolicSpatializer3D::geodesic_distance(p1, p2);
+    const float d02 = HyperbolicSpatializer3D::geodesic_distance(p0, p2);
+    assert(d12 <= (d01 + d02 + 1e-4f));
+
+    // Spatializer processing test
+    HyperbolicSpatializer3D spat(48000);
+    spat.set_source_position(p1, p0);
+    assert(spat.geodesic_distance() > 0.0f);
+
+    auto stereo = spat.process(0.75f);
+    assert(!std::isnan(stereo.left) && !std::isnan(stereo.right));
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (28 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (31 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -621,7 +716,10 @@ int main() {
     test_braille_spectrogram();
     test_polyphony_manager();
     test_henon_heiles_chaos();
+    test_fft_spectral_transform();
+    test_hyperbolic_string_jawari();
+    test_hyperbolic_spatializer_3d();
     test_engine_presets();
-    std::cout << "\033[1;32mALL 28 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    std::cout << "\033[1;32mALL 31 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
