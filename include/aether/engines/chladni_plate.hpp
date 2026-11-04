@@ -93,7 +93,7 @@ public:
     /**
      * @brief Process one audio frame.
      */
-    [[nodiscard]] StereoFrame step(Vec2 pickup_l = {-0.6f, -0.6f}, Vec2 pickup_r = {0.6f, 0.6f}) noexcept {
+    [[nodiscard]] StereoFrame step(Vec2 pickup_l = {-0.55f, 0.35f}, Vec2 pickup_r = {0.45f, -0.40f}) noexcept {
         Sample left = 0.0f;
         Sample right = 0.0f;
 
@@ -143,10 +143,9 @@ private:
 
     void init_modes(float fundamental_freq, float stiffness) noexcept {
         size_t idx = 0;
-        // Generate (m, n) eigenmode lattice
-        for (uint8_t m = 1; m <= 6 && idx < MAX_MODES; ++m) {
-            for (uint8_t n = 1; n <= 6 && idx < MAX_MODES; ++n) {
-                if (m == n) continue; // Pure diagonals vanish in anti-symmetric Chladni formula
+        // Generate unique (m, n) eigenmode lattice (m < n avoids anti-symmetric mode cancellation)
+        for (uint8_t m = 1; m <= 8 && idx < MAX_MODES; ++m) {
+            for (uint8_t n = m + 1; n <= 8 && idx < MAX_MODES; ++n) {
 
                 PlateMode mode;
                 mode.m = m;

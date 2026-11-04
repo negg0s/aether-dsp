@@ -145,8 +145,8 @@ public:
                         meta_data.assign(buffer.begin() + cursor, buffer.begin() + cursor + len);
                         cursor += len;
                     }
+                    if (meta_type == 0x2F) break; // End of track delimiter
                     track.events.push_back({delta, 0xFF, 0, meta_type, 0, meta_data});
-                    if (meta_type == 0x2F) break; // End of track
                 } else {
                     uint8_t type = running_status & 0xF0;
                     uint8_t channel = running_status & 0x0F;

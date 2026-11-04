@@ -34,8 +34,17 @@
 #include "aether/dsp/fx/partitioned_convolution.hpp"
 #include "aether/engine.hpp"
 #include <iostream>
-#include <cassert>
 #include <cmath>
+#include <cstdlib>
+
+#undef assert
+#define assert(expr) \
+    do { \
+        if (!(expr)) { \
+            std::cerr << "\n[TEST ASSERTION FAILURE] " #expr " at " << __FILE__ << ":" << __LINE__ << "\n"; \
+            std::abort(); \
+        } \
+    } while (0)
 
 void test_ring_buffer() {
     std::cout << "[TEST] SPSCRingBuffer... ";
@@ -353,7 +362,7 @@ void test_geodesic_raytracer() {
     GeodesicRayTracer::Config cfg;
     cfg.num_rays = 32;
     cfg.step_dt = 0.002f;
-    cfg.max_time = 0.2f;
+    cfg.max_time = 1.0f;
     cfg.capture_radius = 0.15f;
 
     GeodesicRayTracer tracer(cfg);
@@ -744,7 +753,7 @@ void test_bolza_surface_fuchsian_group() {
     assert(r_wrap < 1.0f);
 
     // Test Bolza Manifold Impulse Response synthesis
-    auto ir = BolzaSurface::synthesize_bolza_ir(48000, 0.2f);
+    auto ir = BolzaSurface::synthesize_bolza_ir(48000, 1.0f);
     assert(!ir.empty());
     bool non_zero = false;
     for (float sample : ir) {

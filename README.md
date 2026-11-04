@@ -57,7 +57,7 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
 - **4th-Order Symplectic Yoshida Integrator:**
   Phase-space preserving geometric numerical integrator ($O(\Delta t^4)$ global accuracy) with Yoshida sub-step constants ($w_1 = \frac{1}{2 - 2^{1/3}}$), ensuring exact conservation of the shadow Hamiltonian and zero energy drift over millions of samples.
 - **Hénon-Heiles Galactic Gravitational Chaos Oscillator:**
-  Models non-integrable stellar orbits in an axisymmetric galactic gravitational potential $V(x,y) = \frac{1}{2}(x^2+y^2) + x^2 y - \frac{1}{3}y^3$. Accurately renders chaotic orbits and Kolmogorov–Arnold–Moser (KAM) invariant tori.
+  Models non-integrable stellar orbits in an axisymmetric galactic gravitational potential $V(x,y) = \frac{1}{2}(x^2+y^2) + x^2 y - \frac{1}{3}y^3$. Accurately renders chaotic orbits and Kolmogorov-Arnold-Moser (KAM) invariant tori.
 - **8-Voice Zero-Allocation Polyphonic Voice Manager:**
   Real-time polyphonic voice allocation with deterministic Least-Recently-Used (LRU) voice stealing, microtonal scale mapping, and soft dynamic headroom normalization for dense chords.
 - **Nonlinear Stiff Kirchhoff String with Hyperbolic Jawari Bridge:**

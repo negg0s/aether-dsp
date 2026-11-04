@@ -54,7 +54,7 @@ struct PolyVoice {
             return StereoFrame{0.0f, 0.0f};
         }
 
-        const auto res = resonator.step({-0.4f, -0.4f}, {0.4f, 0.4f});
+        const auto res = resonator.step({-0.45f, 0.35f}, {0.40f, -0.30f});
         return res * (env * velocity);
     }
 };

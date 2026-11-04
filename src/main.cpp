@@ -355,110 +355,81 @@ void render_all_presets(const std::string& output_dir) {
     fs::create_directories(final_out_dir);
 
     constexpr uint32_t SAMPLE_RATE = 48000;
-    constexpr size_t DURATION_SEC = 3;
-    constexpr size_t TOTAL_SAMPLES = SAMPLE_RATE * DURATION_SEC;
     constexpr size_t BLOCK_SIZE = 64;
 
-    struct PresetInfo {
-        aether::Preset preset;
-        std::string name;
-        std::string desc;
-        aether::Vec2 strike;
-    };
-
-    const std::vector<PresetInfo> presets = {
-        {aether::Preset::HyperbolicCosmicBell, "01_hyperbolic_cosmic_bell.wav", "2D Non-Euclidean Poincare FDTD Waveguide", {0.3f, 0.4f}},
-        {aether::Preset::ChladniPlateGong, "02_chladni_plate_gong.wav", "2D Kirchhoff-Love Thin Plate Modal Resonator", {-0.4f, 0.5f}},
-        {aether::Preset::ChaoticQuantumDrone, "03_chaotic_quantum_drone.wav", "Continuous Lorenz Attractor Non-Linear State Space", {0.0f, 0.0f}},
-        {aether::Preset::HyperbolicAetherSpace, "04_hyperbolic_aether_space.wav", "Hybrid Non-Euclidean Waveguide with Chaotic Modulation", {0.2f, -0.3f}},
-        {aether::Preset::BowedCrystalPlate, "08_bowed_crystal_plate.wav", "Continuous Stribeck Non-Linear Stick-Slip Friction Bowing", {0.35f, 0.45f}}
-    };
-
-    for (const auto& item : presets) {
-        std::cout << "Rendering \033[1m" << item.name << "\033[0m (" << item.desc << ")... ";
+    auto export_wav = [&](const std::string& filename, const std::string& desc,
+                          std::span<const aether::StereoFrame> frames) {
+        std::cout << "Rendering \033[1m" << filename << "\033[0m (" << desc << ")... ";
         std::cout.flush();
+        const std::string out_path = (fs::path(final_out_dir) / filename).string();
+        if (aether::WavWriter::write_stereo_wav(out_path, frames, SAMPLE_RATE, true)) {
+            std::cout << "\033[1;32m[DONE]\033[0m -> " << out_path << "\n";
+        } else {
+            std::cout << "\033[1;31m[FAILED]\033[0m\n";
+        }
+    };
 
+    auto render_engine_track = [&](const std::string& filename, const std::string& desc,
+                                   aether::Preset preset, aether::Vec2 strike, size_t duration_sec = 3) {
         aether::Engine engine(SAMPLE_RATE);
-        engine.load_preset(item.preset);
-        engine.note_on(item.strike, 0.9f);
+        engine.load_preset(preset);
+        engine.note_on(strike, 0.9f);
 
-        std::vector<aether::StereoFrame> audio_data(TOTAL_SAMPLES);
+        const size_t total_samples = SAMPLE_RATE * duration_sec;
+        std::vector<aether::StereoFrame> audio_data(total_samples);
         std::vector<aether::StereoFrame> block(BLOCK_SIZE);
 
         size_t written = 0;
-        while (written < TOTAL_SAMPLES) {
-            const size_t to_render = std::min(BLOCK_SIZE, TOTAL_SAMPLES - written);
+        while (written < total_samples) {
+            const size_t to_render = std::min(BLOCK_SIZE, total_samples - written);
             engine.process_block(std::span<aether::StereoFrame>(block.data(), to_render));
             for (size_t i = 0; i < to_render; ++i) {
                 audio_data[written + i] = block[i];
             }
             written += to_render;
         }
+        export_wav(filename, desc, audio_data);
+    };
 
-        const std::string out_path = (fs::path(final_out_dir) / item.name).string();
-        const bool ok = aether::WavWriter::write_stereo_wav(out_path, audio_data, SAMPLE_RATE, true);
-        if (ok) {
-            std::cout << "\033[1;32m[DONE]\033[0m -> " << out_path << "\n";
-        } else {
-            std::cout << "\033[1;31m[FAILED]\033[0m\n";
-        }
-    }
+    render_engine_track("01_hyperbolic_cosmic_bell.wav", "2D Non-Euclidean Poincare FDTD Waveguide", aether::Preset::HyperbolicCosmicBell, {0.3f, 0.4f});
+    render_engine_track("02_chladni_plate_gong.wav", "2D Kirchhoff-Love Thin Plate Modal Resonator", aether::Preset::ChladniPlateGong, {-0.4f, 0.5f});
+    render_engine_track("03_chaotic_quantum_drone.wav", "Continuous Lorenz Attractor Non-Linear State Space", aether::Preset::ChaoticQuantumDrone, {0.0f, 0.0f});
+    render_engine_track("04_hyperbolic_aether_space.wav", "Hybrid Non-Euclidean Waveguide with Chaotic Modulation", aether::Preset::HyperbolicAetherSpace, {0.2f, -0.3f});
+    render_engine_track("08_bowed_crystal_plate.wav", "Continuous Stribeck Non-Linear Stick-Slip Friction Bowing", aether::Preset::BowedCrystalPlate, {0.35f, 0.45f});
 
-    // Render Algorithmic Composition
-    std::cout << "Rendering \033[1m05_fibonacci_non_euclidean_sonata.wav\033[0m (Algorithmic Xenakis/Fibonacci Series)... ";
-    std::cout.flush();
+    // 05: Algorithmic Fibonacci Sonata
     constexpr double SONATA_DURATION = 8.0;
     const auto score = aether::math::AlgorithmicComposer::generate_fibonacci_score(SONATA_DURATION);
     const auto sonata_frames = aether::math::AlgorithmicComposer::render_score(score, SONATA_DURATION, SAMPLE_RATE);
+    export_wav("05_fibonacci_non_euclidean_sonata.wav", "Algorithmic Xenakis/Fibonacci Series", sonata_frames);
 
-    const std::string sonata_path = (fs::path(final_out_dir) / "05_fibonacci_non_euclidean_sonata.wav").string();
-    const bool sonata_ok = aether::WavWriter::write_stereo_wav(sonata_path, sonata_frames, SAMPLE_RATE, true);
-    if (sonata_ok) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << sonata_path << "\n";
-    } else {
-        std::cout << "\033[1;31m[FAILED]\033[0m\n";
-    }
-
-    // Render 3D Binaural Orbiting Audio Demo
-    std::cout << "Rendering \033[1m06_binaural_3d_orbit_demo.wav\033[0m (3D Woodworth Spherical Head Model)... ";
-    std::cout.flush();
+    // 06: 3D Binaural Orbiting Audio Demo
     constexpr size_t BINAURAL_SAMPLES = SAMPLE_RATE * 6;
     std::vector<aether::StereoFrame> binaural_frames(BINAURAL_SAMPLES);
     aether::Engine bin_engine(SAMPLE_RATE);
     bin_engine.load_preset(aether::Preset::HyperbolicCosmicBell);
     aether::dsp::fx::BinauralPanner panner(SAMPLE_RATE);
-
     std::vector<aether::StereoFrame> bin_block(BLOCK_SIZE);
+
     for (size_t i = 0; i < BINAURAL_SAMPLES; i += BLOCK_SIZE) {
         if (i % (SAMPLE_RATE + SAMPLE_RATE / 5) == 0) {
             bin_engine.note_on({0.3f, 0.4f}, 0.9f);
         }
-
         const float progress = static_cast<float>(i) / BINAURAL_SAMPLES;
         const float azimuth = progress * 360.0f - 180.0f;
         panner.set_position(azimuth, 1.5f);
 
         const size_t to_render = std::min(BLOCK_SIZE, BINAURAL_SAMPLES - i);
         bin_engine.process_block(std::span<aether::StereoFrame>(bin_block.data(), to_render));
-
         for (size_t s = 0; s < to_render; ++s) {
             const float mono = (bin_block[s].left + bin_block[s].right) * 0.5f;
             binaural_frames[i + s] = panner.process(mono);
         }
     }
-    const std::string binaural_path = (fs::path(final_out_dir) / "06_binaural_3d_orbit_demo.wav").string();
-    if (aether::WavWriter::write_stereo_wav(binaural_path, binaural_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << binaural_path << "\n";
-    }
+    export_wav("06_binaural_3d_orbit_demo.wav", "3D Woodworth Spherical Head Model", binaural_frames);
 
-    // Render 09: Hyperbolic Geodesic Acoustic Ray-Traced Reverb
-    std::cout << "Rendering \033[1m09_hyperbolic_geodesic_reverb.wav\033[0m (Hamiltonian Geodesic Ray Tracer)... ";
-    std::cout.flush();
-    aether::math::GeodesicRayTracer::Config ray_cfg;
-    ray_cfg.num_rays = 128;
-    ray_cfg.step_dt = 0.001f;
-    ray_cfg.max_time = 0.8f;
-    ray_cfg.capture_radius = 0.08f;
+    // 09: Hyperbolic Geodesic Acoustic Ray-Traced Reverb
+    aether::math::GeodesicRayTracer::Config ray_cfg{128, 0.001f, 0.8f, 0.08f};
     aether::math::GeodesicRayTracer tracer(ray_cfg);
     auto arrivals = tracer.trace({-0.3f, -0.2f}, {0.4f, 0.35f});
     auto ir = tracer.synthesize_impulse_response(arrivals, SAMPLE_RATE, 0.8f);
@@ -473,7 +444,6 @@ void render_all_presets(const std::string& output_dir) {
     constexpr size_t REV_SAMPLES = SAMPLE_RATE * 3;
     std::vector<aether::StereoFrame> rev_frames(REV_SAMPLES);
     std::vector<aether::StereoFrame> rev_block(BLOCK_SIZE);
-
     for (size_t i = 0; i < REV_SAMPLES; i += BLOCK_SIZE) {
         const size_t to_render = std::min(BLOCK_SIZE, REV_SAMPLES - i);
         rev_engine.process_block(std::span<aether::StereoFrame>(rev_block.data(), to_render));
@@ -481,35 +451,22 @@ void render_all_presets(const std::string& output_dir) {
             rev_frames[i + s] = conv_rev.process(rev_block[s]);
         }
     }
+    export_wav("09_hyperbolic_geodesic_reverb.wav", "Hamiltonian Geodesic Ray Tracer", rev_frames);
 
-    const std::string rev_path = (fs::path(final_out_dir) / "09_hyperbolic_geodesic_reverb.wav").string();
-    if (aether::WavWriter::write_stereo_wav(rev_path, rev_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << rev_path << "\n";
-    }
-
-    // Render 10: Nonlinear Föppl-von Kármán Large-Deflection Turbulent Gong
-    std::cout << "Rendering \033[1m10_von_karman_turbulent_gong.wav\033[0m (Nonlinear von Karman Dynamics)... ";
-    std::cout.flush();
+    // 10: Nonlinear Föppl-von Kármán Large-Deflection Turbulent Gong
     aether::engines::VonKarmanPlate gong_plate(SAMPLE_RATE);
     gong_plate.init_modes(90.0f, 1.25f, 0.85f);
     gong_plate.strike({0.35f, 0.40f}, 1.2f, 0.003f);
-
     constexpr size_t GONG_SAMPLES = SAMPLE_RATE * 4;
     std::vector<aether::StereoFrame> gong_frames(GONG_SAMPLES);
     for (size_t s = 0; s < GONG_SAMPLES; ++s) {
         gong_frames[s] = gong_plate.step();
     }
-    const std::string gong_path = (fs::path(final_out_dir) / "10_von_karman_turbulent_gong.wav").string();
-    if (aether::WavWriter::write_stereo_wav(gong_path, gong_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << gong_path << "\n";
-    }
+    export_wav("10_von_karman_turbulent_gong.wav", "Nonlinear von Karman Dynamics", gong_frames);
 
-    // Render 11: Beltrami Pseudosphere Tractrix Horn Acoustic Flare
-    std::cout << "Rendering \033[1m11_pseudosphere_tractrix_horn.wav\033[0m (Beltrami Pseudosphere Webster Horn)... ";
-    std::cout.flush();
+    // 11: Beltrami Pseudosphere Tractrix Horn
     aether::engines::PseudosphereHorn horn(SAMPLE_RATE);
     horn.excite_throat(1.0f);
-
     constexpr size_t HORN_SAMPLES = SAMPLE_RATE * 3;
     std::vector<aether::StereoFrame> horn_frames(HORN_SAMPLES);
     for (size_t s = 0; s < HORN_SAMPLES; ++s) {
@@ -518,40 +475,26 @@ void render_all_presets(const std::string& output_dir) {
         }
         horn_frames[s] = horn.step();
     }
-    const std::string horn_path = (fs::path(final_out_dir) / "11_pseudosphere_tractrix_horn.wav").string();
-    if (aether::WavWriter::write_stereo_wav(horn_path, horn_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << horn_path << "\n";
-    }
+    export_wav("11_pseudosphere_tractrix_horn.wav", "Beltrami Pseudosphere Webster Horn", horn_frames);
 
-    // Render 12: Hénon-Heiles Galactic Hamiltonian Chaos
-    std::cout << "Rendering \033[1m12_henon_heiles_galactic_chaos.wav\033[0m (Astrophysical 4th-Order Symplectic Chaos)... ";
-    std::cout.flush();
+    // 12: Hénon-Heiles Galactic Hamiltonian Chaos
     aether::engines::HenonHeilesOscillator henon_osc(0.145, 340.0);
     constexpr size_t HENON_SAMPLES = SAMPLE_RATE * 3;
     std::vector<aether::StereoFrame> henon_frames(HENON_SAMPLES);
     for (size_t s = 0; s < HENON_SAMPLES; ++s) {
         henon_frames[s] = henon_osc.step(static_cast<float>(SAMPLE_RATE));
     }
-    const std::string henon_path = (fs::path(final_out_dir) / "12_henon_heiles_galactic_chaos.wav").string();
-    if (aether::WavWriter::write_stereo_wav(henon_path, henon_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << henon_path << "\n";
-    }
+    export_wav("12_henon_heiles_galactic_chaos.wav", "Astrophysical 4th-Order Symplectic Chaos", henon_frames);
 
-    // Render 13: 8-Voice Polyphonic Bohlen-Pierce Microtonal Cathedral
-    std::cout << "Rendering \033[1m13_polyphonic_microtonal_cathedral.wav\033[0m (8-Voice Polyphonic Resonators)... ";
-    std::cout.flush();
+    // 13: 8-Voice Polyphonic Microtonal Cathedral
     aether::Engine poly_engine(SAMPLE_RATE);
     poly_engine.load_preset(aether::Preset::ChladniPlateGong);
     constexpr size_t CHORD_DUR = SAMPLE_RATE * 1;
     constexpr size_t TOTAL_POLY_SAMPLES = CHORD_DUR * 4;
     std::vector<aether::StereoFrame> poly_frames(TOTAL_POLY_SAMPLES);
     const int chords[4][4] = {
-        {60, 64, 67, 71},
-        {58, 63, 67, 70},
-        {57, 60, 65, 69},
-        {55, 62, 67, 72}
+        {60, 64, 67, 71}, {58, 63, 67, 70}, {57, 60, 65, 69}, {55, 62, 67, 72}
     };
-
     for (int c = 0; c < 4; ++c) {
         poly_engine.all_notes_off();
         for (int v = 0; v < 4; ++v) {
@@ -563,18 +506,12 @@ void render_all_presets(const std::string& output_dir) {
             poly_frames[c * CHORD_DUR + s] = chord_block[s];
         }
     }
-    const std::string poly_path = (fs::path(final_out_dir) / "13_polyphonic_microtonal_cathedral.wav").string();
-    if (aether::WavWriter::write_stereo_wav(poly_path, poly_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << poly_path << "\n";
-    }
+    export_wav("13_polyphonic_microtonal_cathedral.wav", "8-Voice Polyphonic Resonators", poly_frames);
 
-    // Render 14: Nonlinear Stiff Kirchhoff String with Hyperbolic Jawari Bridge
-    std::cout << "Rendering \033[1m14_sitar_hyperbolic_jawari.wav\033[0m (Nonlinear Stiff String & Jawari Bridge)... ";
-    std::cout.flush();
+    // 14: Nonlinear Stiff Kirchhoff String with Hyperbolic Jawari Bridge
     aether::engines::HyperbolicString sitar_string(SAMPLE_RATE);
-    sitar_string.set_pitch(146.83f); // D3
+    sitar_string.set_pitch(146.83f);
     sitar_string.pluck(0.22f, 0.95f, 0.08f);
-
     constexpr size_t SITAR_SAMPLES = SAMPLE_RATE * 4;
     std::vector<aether::StereoFrame> sitar_frames(SITAR_SAMPLES);
     for (size_t s = 0; s < SITAR_SAMPLES; ++s) {
@@ -583,18 +520,12 @@ void render_all_presets(const std::string& output_dir) {
         }
         sitar_frames[s] = sitar_string.step();
     }
-    const std::string sitar_path = (fs::path(final_out_dir) / "14_sitar_hyperbolic_jawari.wav").string();
-    if (aether::WavWriter::write_stereo_wav(sitar_path, sitar_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << sitar_path << "\n";
-    }
+    export_wav("14_sitar_hyperbolic_jawari.wav", "Nonlinear Stiff String & Jawari Bridge", sitar_frames);
 
-    // Render 15: 3D Poincaré Ball (H^3) Non-Euclidean Binaural Orbit
-    std::cout << "Rendering \033[1m15_hyperbolic_ball_3d_spatial.wav\033[0m (3D Poincare Ball H^3 Acoustics)... ";
-    std::cout.flush();
+    // 15: 3D Poincaré Ball (H^3) Non-Euclidean Binaural Orbit
     aether::Engine bell_engine(SAMPLE_RATE);
     bell_engine.load_preset(aether::Preset::HyperbolicCosmicBell);
     aether::dsp::fx::HyperbolicSpatializer3D spat3d(SAMPLE_RATE);
-
     constexpr size_t SPAT3D_SAMPLES = SAMPLE_RATE * 6;
     std::vector<aether::StereoFrame> spat3d_frames(SPAT3D_SAMPLES);
     std::vector<aether::StereoFrame> dry_block(BLOCK_SIZE);
@@ -603,36 +534,24 @@ void render_all_presets(const std::string& output_dir) {
         if (i % (SAMPLE_RATE + SAMPLE_RATE / 4) == 0) {
             bell_engine.note_on({0.25f, 0.35f}, 0.9f);
         }
-
         const float progress = static_cast<float>(i) / SPAT3D_SAMPLES;
         const float theta = progress * 4.0f * std::numbers::pi_v<float>;
         const float r = 0.30f + 0.55f * std::sin(progress * std::numbers::pi_v<float>);
-        const float sx = r * std::cos(theta);
-        const float sy = r * std::sin(theta);
-        const float sz = 0.25f * std::sin(theta * 2.0f);
-
-        spat3d.set_source_position({sx, sy, sz}, {0.0f, 0.0f, 0.0f});
+        spat3d.set_source_position({r * std::cos(theta), r * std::sin(theta), 0.25f * std::sin(theta * 2.0f)}, {0.0f, 0.0f, 0.0f});
 
         const size_t to_render = std::min(BLOCK_SIZE, SPAT3D_SAMPLES - i);
         bell_engine.process_block(std::span<aether::StereoFrame>(dry_block.data(), to_render));
-
         for (size_t s = 0; s < to_render; ++s) {
             const float mono = (dry_block[s].left + dry_block[s].right) * 0.5f;
             spat3d_frames[i + s] = spat3d.process(mono);
         }
     }
-    const std::string spat3d_path = (fs::path(final_out_dir) / "15_hyperbolic_ball_3d_spatial.wav").string();
-    if (aether::WavWriter::write_stereo_wav(spat3d_path, spat3d_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << spat3d_path << "\n";
-    }
+    export_wav("15_hyperbolic_ball_3d_spatial.wav", "3D Poincare Ball H^3 Acoustics", spat3d_frames);
 
-    // Render 16: Bolza Genus-2 Surface Closed Hyperbolic Universe
-    std::cout << "Rendering \033[1m16_bolza_compact_universe.wav\033[0m (Bolza Genus-2 Surface Manifold Reverb)... ";
-    std::cout.flush();
+    // 16: Bolza Genus-2 Surface Closed Hyperbolic Universe
     const auto bolza_ir = aether::math::BolzaSurface::synthesize_bolza_ir(SAMPLE_RATE, 1.2f);
     aether::dsp::fx::PartitionedConvolution bolza_conv;
     bolza_conv.load_impulse_response(bolza_ir, 0.55f);
-
     aether::Engine bolza_engine(SAMPLE_RATE);
     bolza_engine.load_preset(aether::Preset::ChladniPlateGong);
     bolza_engine.note_on({0.3f, 0.4f}, 0.85f);
@@ -640,7 +559,6 @@ void render_all_presets(const std::string& output_dir) {
     constexpr size_t BOLZA_SAMPLES = SAMPLE_RATE * 3;
     std::vector<aether::StereoFrame> bolza_frames(BOLZA_SAMPLES);
     std::vector<aether::StereoFrame> bolza_block(BLOCK_SIZE);
-
     for (size_t i = 0; i < BOLZA_SAMPLES; i += BLOCK_SIZE) {
         const size_t to_render = std::min(BLOCK_SIZE, BOLZA_SAMPLES - i);
         bolza_engine.process_block(std::span<aether::StereoFrame>(bolza_block.data(), to_render));
@@ -648,26 +566,16 @@ void render_all_presets(const std::string& output_dir) {
             bolza_frames[i + s] = bolza_conv.process(bolza_block[s]);
         }
     }
-    const std::string bolza_path = (fs::path(final_out_dir) / "16_bolza_compact_universe.wav").string();
-    if (aether::WavWriter::write_stereo_wav(bolza_path, bolza_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << bolza_path << "\n";
-    }
+    export_wav("16_bolza_compact_universe.wav", "Bolza Genus-2 Surface Manifold Reverb", bolza_frames);
 
-    // Render 17: Partitioned FFT Convolution Hyperbolic Cathedral
-    std::cout << "Rendering \033[1m17_partitioned_hyperbolic_cathedral.wav\033[0m (Zero-Latency Partitioned FFT Reverb)... ";
-    std::cout.flush();
-    aether::math::GeodesicRayTracer::Config cat_cfg;
-    cat_cfg.num_rays = 128;
-    cat_cfg.step_dt = 0.0008f;
-    cat_cfg.max_time = 1.8f;
-    cat_cfg.capture_radius = 0.08f;
+    // 17: Partitioned FFT Convolution Hyperbolic Cathedral
+    aether::math::GeodesicRayTracer::Config cat_cfg{128, 0.0008f, 1.8f, 0.08f};
     aether::math::GeodesicRayTracer cat_tracer(cat_cfg);
     auto cat_arrivals = cat_tracer.trace({-0.4f, -0.3f}, {0.35f, 0.4f});
     auto cat_ir = cat_tracer.synthesize_impulse_response(cat_arrivals, SAMPLE_RATE, 1.8f);
 
     aether::dsp::fx::PartitionedConvolution cat_conv;
     cat_conv.load_impulse_response(cat_ir, 0.60f);
-
     aether::Engine cat_engine(SAMPLE_RATE);
     cat_engine.load_preset(aether::Preset::HyperbolicCosmicBell);
     cat_engine.note_on({0.25f, 0.35f}, 0.95f);
@@ -675,7 +583,6 @@ void render_all_presets(const std::string& output_dir) {
     constexpr size_t CAT_SAMPLES = SAMPLE_RATE * 4;
     std::vector<aether::StereoFrame> cat_frames(CAT_SAMPLES);
     std::vector<aether::StereoFrame> cat_block(BLOCK_SIZE);
-
     for (size_t i = 0; i < CAT_SAMPLES; i += BLOCK_SIZE) {
         const size_t to_render = std::min(BLOCK_SIZE, CAT_SAMPLES - i);
         cat_engine.process_block(std::span<aether::StereoFrame>(cat_block.data(), to_render));
@@ -683,18 +590,12 @@ void render_all_presets(const std::string& output_dir) {
             cat_frames[i + s] = cat_conv.process(cat_block[s]);
         }
     }
-    const std::string cat_path = (fs::path(final_out_dir) / "17_partitioned_hyperbolic_cathedral.wav").string();
-    if (aether::WavWriter::write_stereo_wav(cat_path, cat_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << cat_path << "\n";
-    }
+    export_wav("17_partitioned_hyperbolic_cathedral.wav", "Zero-Latency Partitioned FFT Reverb", cat_frames);
 
-    // Render 18: Sine-Gordon Integrable Topological Solitons & Breathers
-    std::cout << "Rendering \033[1m18_sine_gordon_topological_breather.wav\033[0m (Relativistic Sine-Gordon Field Dynamics)... ";
-    std::cout.flush();
+    // 18: Sine-Gordon Integrable Topological Solitons & Breathers
     aether::engines::SineGordonBreather sgb(SAMPLE_RATE);
     sgb.configure(0.42f, 196.0f, 0.0004f);
     sgb.inject_breather(0.5f, 0.73f, 1.15f);
-
     constexpr size_t SGB_SAMPLES = static_cast<size_t>(SAMPLE_RATE * 3.5);
     std::vector<aether::StereoFrame> sgb_frames(SGB_SAMPLES);
     for (size_t s = 0; s < SGB_SAMPLES; ++s) {
@@ -705,18 +606,12 @@ void render_all_presets(const std::string& output_dir) {
         }
         sgb_frames[s] = sgb.process();
     }
-    const std::string sgb_path = (fs::path(final_out_dir) / "18_sine_gordon_topological_breather.wav").string();
-    if (aether::WavWriter::write_stereo_wav(sgb_path, sgb_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << sgb_path << "\n";
-    }
+    export_wav("18_sine_gordon_topological_breather.wav", "Relativistic Sine-Gordon Field Dynamics", sgb_frames);
 
-    // Render 19: Acoustic Black Hole & Sonic Horizon Waveguide
-    std::cout << "Rendering \033[1m19_acoustic_black_hole_horizon.wav\033[0m (Sonic Event Horizon & Hawking Radiation)... ";
-    std::cout.flush();
+    // 19: Acoustic Black Hole & Sonic Horizon Waveguide
     aether::engines::AcousticBlackHole abh(SAMPLE_RATE);
     abh.configure(2.4f, 0.10f, 0.009f, 0.035f);
     abh.strike(0.88f, 0.95f);
-
     constexpr size_t ABH_SAMPLES = SAMPLE_RATE * 4;
     std::vector<aether::StereoFrame> abh_frames(ABH_SAMPLES);
     for (size_t s = 0; s < ABH_SAMPLES; ++s) {
@@ -725,18 +620,12 @@ void render_all_presets(const std::string& output_dir) {
         }
         abh_frames[s] = abh.process();
     }
-    const std::string abh_path = (fs::path(final_out_dir) / "19_acoustic_black_hole_horizon.wav").string();
-    if (aether::WavWriter::write_stereo_wav(abh_path, abh_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << abh_path << "\n";
-    }
+    export_wav("19_acoustic_black_hole_horizon.wav", "Sonic Event Horizon & Hawking Radiation", abh_frames);
 
-    // Render 20: Relativistic Morris-Thorne Multi-Manifold Acoustic Wormhole
-    std::cout << "Rendering \033[1m20_morris_thorne_acoustic_wormhole.wav\033[0m (Throat Coupling & QNM Ringing)... ";
-    std::cout.flush();
+    // 20: Relativistic Morris-Thorne Multi-Manifold Acoustic Wormhole
     aether::engines::AcousticWormhole wormhole(SAMPLE_RATE);
     wormhole.configure(0.35f, 1.4f, 0.42f, 0.0006f);
     wormhole.strike_universe_a(0.68f, 0.95f);
-
     constexpr size_t WORMHOLE_SAMPLES = SAMPLE_RATE * 4;
     std::vector<aether::StereoFrame> wormhole_frames(WORMHOLE_SAMPLES);
     for (size_t s = 0; s < WORMHOLE_SAMPLES; ++s) {
@@ -745,18 +634,12 @@ void render_all_presets(const std::string& output_dir) {
         }
         wormhole_frames[s] = wormhole.process();
     }
-    const std::string wormhole_path = (fs::path(final_out_dir) / "20_morris_thorne_acoustic_wormhole.wav").string();
-    if (aether::WavWriter::write_stereo_wav(wormhole_path, wormhole_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << wormhole_path << "\n";
-    }
+    export_wav("20_morris_thorne_acoustic_wormhole.wav", "Throat Coupling & QNM Ringing", wormhole_frames);
 
-    // Render 21: Topological Phononic Metamaterial & Chiral Dirac Edge States
-    std::cout << "Rendering \033[1m21_topological_dirac_metamaterial.wav\033[0m (Valley-Hall Backscattering Immunity)... ";
-    std::cout.flush();
+    // 21: Topological Phononic Metamaterial & Chiral Dirac Edge States
     aether::engines::TopologicalMetamaterial topo(SAMPLE_RATE);
     topo.configure(0.48f, 0.38f, 0.0005f);
     topo.strike_edge(0.95f);
-
     constexpr size_t TOPO_SAMPLES = static_cast<size_t>(SAMPLE_RATE * 3.5);
     std::vector<aether::StereoFrame> topo_frames(TOPO_SAMPLES);
     for (size_t s = 0; s < TOPO_SAMPLES; ++s) {
@@ -765,18 +648,12 @@ void render_all_presets(const std::string& output_dir) {
         }
         topo_frames[s] = topo.process();
     }
-    const std::string topo_path = (fs::path(final_out_dir) / "21_topological_dirac_metamaterial.wav").string();
-    if (aether::WavWriter::write_stereo_wav(topo_path, topo_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << topo_path << "\n";
-    }
+    export_wav("21_topological_dirac_metamaterial.wav", "Valley-Hall Backscattering Immunity", topo_frames);
 
-    // Render 22: Toda / KdV Completely Integrable Soliton Lattice & FPUT Recurrence
-    std::cout << "Rendering \033[1m22_toda_kdv_integrable_soliton_lattice.wav\033[0m (Non-Thermalizing Solitary Shocks)... ";
-    std::cout.flush();
+    // 22: Toda / KdV Completely Integrable Soliton Lattice & FPUT Recurrence
     aether::engines::KdvSolitonLattice toda(SAMPLE_RATE);
     toda.configure(1.8f, 340.0f, 0.0004f);
     toda.inject_soliton(0.2f, 1.3f);
-
     constexpr size_t TODA_SAMPLES = SAMPLE_RATE * 4;
     std::vector<aether::StereoFrame> toda_frames(TODA_SAMPLES);
     for (size_t s = 0; s < TODA_SAMPLES; ++s) {
@@ -785,10 +662,7 @@ void render_all_presets(const std::string& output_dir) {
         }
         toda_frames[s] = toda.process();
     }
-    const std::string toda_path = (fs::path(final_out_dir) / "22_toda_kdv_integrable_soliton_lattice.wav").string();
-    if (aether::WavWriter::write_stereo_wav(toda_path, toda_frames, SAMPLE_RATE, true)) {
-        std::cout << "\033[1;32m[DONE]\033[0m -> " << toda_path << "\n";
-    }
+    export_wav("22_toda_kdv_integrable_soliton_lattice.wav", "Non-Thermalizing Solitary Shocks", toda_frames);
 
     // Export Standard MIDI File
     std::cout << "Exporting \033[1mfibonacci_score.mid\033[0m (Standard MIDI Format 1)... ";

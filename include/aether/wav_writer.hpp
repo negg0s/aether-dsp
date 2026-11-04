@@ -3,6 +3,7 @@
 #include "types.hpp"
 #include <fstream>
 #include <vector>
+#include <span>
 #include <string>
 #include <cstring>
 #include <cstdint>
@@ -23,7 +24,7 @@ public:
     };
 
     static bool write_stereo_wav(const std::string& filepath,
-                                 const std::vector<StereoFrame>& frames,
+                                 std::span<const StereoFrame> frames,
                                  uint32_t sample_rate = DEFAULT_SAMPLE_RATE,
                                  bool use_float = true) {
         std::ofstream file(filepath, std::ios::binary);

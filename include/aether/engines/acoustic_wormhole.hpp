@@ -121,12 +121,9 @@ public:
         }
 
         // --- 3. Propagate Wormhole Throat ---
-        // Throat boundaries couple to Universe A (at r = 0) and Universe B (at r = 0)
-        const float coupling_a = b0_ * 0.5f * (u_a_[1] - throat_[0]);
-        const float coupling_b = b0_ * 0.5f * (u_b_[1] - throat_[THROAT_NODES - 1]);
-
-        throat_next_[0] = throat_[0] + coupling_a;
-        throat_next_[THROAT_NODES - 1] = throat_[THROAT_NODES - 1] + coupling_b;
+        // Node 0 couples to Universe A (u_a_[0]), Node THROAT_NODES - 1 couples to Universe B (u_b_[0])
+        const float laplacian_t0 = throat_[1] - 2.0f * throat_[0] + u_a_[0] * b0_;
+        throat_next_[0] = ((2.0f - damping_) * throat_[0] - throat_prev_[0] + c2 * laplacian_t0) * damp_factor;
 
         for (size_t k = 1; k < THROAT_NODES - 1; ++k) {
             const float laplacian = throat_[k + 1] - 2.0f * throat_[k] + throat_[k - 1];
@@ -135,9 +132,15 @@ public:
             throat_next_[k] = (2.0f * throat_[k] - throat_prev_[k] + c2 * laplacian + qnm_restore) * 0.9995f;
         }
 
-        // Junction conditions at throats: u_a[0] receives flux from throat[0]
-        u_a_next_[0] = (u_a_[1] + throat_[0] * b0_) * 0.5f;
-        u_b_next_[0] = (u_b_[1] + throat_[THROAT_NODES - 1] * b0_) * 0.5f;
+        const float laplacian_tend = u_b_[0] * b0_ - 2.0f * throat_[THROAT_NODES - 1] + throat_[THROAT_NODES - 2];
+        throat_next_[THROAT_NODES - 1] = ((2.0f - damping_) * throat_[THROAT_NODES - 1] - throat_prev_[THROAT_NODES - 1] + c2 * laplacian_tend) * damp_factor;
+
+        // Junction boundary conditions at r = 0 for both universes:
+        const float laplacian_a0 = u_a_[1] - 2.0f * u_a_[0] + throat_[0] * b0_;
+        u_a_next_[0] = ((2.0f - damping_) * u_a_[0] - u_a_prev_[0] + c2 * laplacian_a0) * damp_factor;
+
+        const float laplacian_b0 = u_b_[1] - 2.0f * u_b_[0] + throat_[THROAT_NODES - 1] * b0_;
+        u_b_next_[0] = ((2.0f - damping_) * u_b_[0] - u_b_prev_[0] + c2 * laplacian_b0) * damp_factor;
 
         // Shift buffers
         u_a_prev_ = u_a_;
