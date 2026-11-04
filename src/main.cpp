@@ -21,6 +21,9 @@
 #include "aether/engines/hyperbolic_string.hpp"
 #include "aether/dsp/fx/hyperbolic_spatializer_3d.hpp"
 #include "aether/polyphony.hpp"
+#include "aether/math/fft.hpp"
+#include "aether/math/bolza_surface.hpp"
+#include "aether/dsp/fx/partitioned_convolution.hpp"
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -311,6 +314,39 @@ void run_sweep_benchmark() {
     std::cout << "\n";
 }
 
+void run_fft_benchmark() {
+    std::cout << "\033[1;36m=== Radix-2 Cooley-Tukey FFT Transform Throughput Benchmark ===\033[0m\n";
+    std::cout << "| FFT Size N | Iterations | Total Time (ms) | Speed (M FFT/s) | Latency (ns) |\n";
+    std::cout << "| :--- | :--- | :--- | :--- | :--- |\n";
+
+    const size_t sizes[] = {64, 128, 256, 512, 1024, 2048, 4096};
+    constexpr size_t NUM_ITER = 15000;
+
+    for (size_t n : sizes) {
+        std::vector<std::complex<float>> data(n);
+        for (size_t i = 0; i < n; ++i) {
+            data[i] = {std::sin(static_cast<float>(i)), 0.0f};
+        }
+
+        const auto t0 = std::chrono::high_resolution_clock::now();
+        for (size_t iter = 0; iter < NUM_ITER; ++iter) {
+            aether::math::FFT::forward(data);
+        }
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        const double ms = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-3;
+        const double m_ffts_sec = (NUM_ITER / (ms * 1e-3)) / 1e6;
+        const double ns_per_fft = (ms * 1e6) / NUM_ITER;
+
+        std::cout << std::fixed << std::setprecision(2);
+        std::cout << "| N = " << std::left << std::setw(6) << n
+                  << " | " << std::setw(10) << NUM_ITER
+                  << " | " << std::setw(15) << ms
+                  << " | \033[1;32m" << std::setw(15) << m_ffts_sec << "\033[0m"
+                  << " | " << std::setw(12) << ns_per_fft << " |\n";
+    }
+    std::cout << "\n";
+}
+
 void render_all_presets(const std::string& output_dir) {
     std::cout << "\033[1;34m=== Rendering Lossless 32-bit Float Audio Presets ===\033[0m\n";
 
@@ -590,6 +626,110 @@ void render_all_presets(const std::string& output_dir) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << spat3d_path << "\n";
     }
 
+    // Render 16: Bolza Genus-2 Surface Closed Hyperbolic Universe
+    std::cout << "Rendering \033[1m16_bolza_compact_universe.wav\033[0m (Bolza Genus-2 Surface Manifold Reverb)... ";
+    std::cout.flush();
+    const auto bolza_ir = aether::math::BolzaSurface::synthesize_bolza_ir(SAMPLE_RATE, 1.2f);
+    aether::dsp::fx::PartitionedConvolution bolza_conv;
+    bolza_conv.load_impulse_response(bolza_ir, 0.55f);
+
+    aether::Engine bolza_engine(SAMPLE_RATE);
+    bolza_engine.load_preset(aether::Preset::ChladniPlateGong);
+    bolza_engine.note_on({0.3f, 0.4f}, 0.85f);
+
+    constexpr size_t BOLZA_SAMPLES = SAMPLE_RATE * 3;
+    std::vector<aether::StereoFrame> bolza_frames(BOLZA_SAMPLES);
+    std::vector<aether::StereoFrame> bolza_block(BLOCK_SIZE);
+
+    for (size_t i = 0; i < BOLZA_SAMPLES; i += BLOCK_SIZE) {
+        const size_t to_render = std::min(BLOCK_SIZE, BOLZA_SAMPLES - i);
+        bolza_engine.process_block(std::span<aether::StereoFrame>(bolza_block.data(), to_render));
+        for (size_t s = 0; s < to_render; ++s) {
+            bolza_frames[i + s] = bolza_conv.process(bolza_block[s]);
+        }
+    }
+    const std::string bolza_path = (fs::path(final_out_dir) / "16_bolza_compact_universe.wav").string();
+    if (aether::WavWriter::write_stereo_wav(bolza_path, bolza_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << bolza_path << "\n";
+    }
+
+    // Render 17: Partitioned FFT Convolution Hyperbolic Cathedral
+    std::cout << "Rendering \033[1m17_partitioned_hyperbolic_cathedral.wav\033[0m (Zero-Latency Partitioned FFT Reverb)... ";
+    std::cout.flush();
+    aether::math::GeodesicRayTracer::Config cat_cfg;
+    cat_cfg.num_rays = 128;
+    cat_cfg.step_dt = 0.0008f;
+    cat_cfg.max_time = 1.8f;
+    cat_cfg.capture_radius = 0.08f;
+    aether::math::GeodesicRayTracer cat_tracer(cat_cfg);
+    auto cat_arrivals = cat_tracer.trace({-0.4f, -0.3f}, {0.35f, 0.4f});
+    auto cat_ir = cat_tracer.synthesize_impulse_response(cat_arrivals, SAMPLE_RATE, 1.8f);
+
+    aether::dsp::fx::PartitionedConvolution cat_conv;
+    cat_conv.load_impulse_response(cat_ir, 0.60f);
+
+    aether::Engine cat_engine(SAMPLE_RATE);
+    cat_engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+    cat_engine.note_on({0.25f, 0.35f}, 0.95f);
+
+    constexpr size_t CAT_SAMPLES = SAMPLE_RATE * 4;
+    std::vector<aether::StereoFrame> cat_frames(CAT_SAMPLES);
+    std::vector<aether::StereoFrame> cat_block(BLOCK_SIZE);
+
+    for (size_t i = 0; i < CAT_SAMPLES; i += BLOCK_SIZE) {
+        const size_t to_render = std::min(BLOCK_SIZE, CAT_SAMPLES - i);
+        cat_engine.process_block(std::span<aether::StereoFrame>(cat_block.data(), to_render));
+        for (size_t s = 0; s < to_render; ++s) {
+            cat_frames[i + s] = cat_conv.process(cat_block[s]);
+        }
+    }
+    const std::string cat_path = (fs::path(final_out_dir) / "17_partitioned_hyperbolic_cathedral.wav").string();
+    if (aether::WavWriter::write_stereo_wav(cat_path, cat_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << cat_path << "\n";
+    }
+
+    // Render 18: Sine-Gordon Integrable Topological Solitons & Breathers
+    std::cout << "Rendering \033[1m18_sine_gordon_topological_breather.wav\033[0m (Relativistic Sine-Gordon Field Dynamics)... ";
+    std::cout.flush();
+    aether::engines::SineGordonBreather sgb(SAMPLE_RATE);
+    sgb.configure(0.42f, 196.0f, 0.0004f);
+    sgb.inject_breather(0.5f, 0.73f, 1.15f);
+
+    constexpr size_t SGB_SAMPLES = static_cast<size_t>(SAMPLE_RATE * 3.5);
+    std::vector<aether::StereoFrame> sgb_frames(SGB_SAMPLES);
+    for (size_t s = 0; s < SGB_SAMPLES; ++s) {
+        if (s == static_cast<size_t>(SAMPLE_RATE * 1.2)) {
+            sgb.inject_kink_antikink(0.35f, 0.72f);
+        } else if (s == static_cast<size_t>(SAMPLE_RATE * 2.3)) {
+            sgb.strike(0.32f, 0.85f);
+        }
+        sgb_frames[s] = sgb.process();
+    }
+    const std::string sgb_path = (fs::path(final_out_dir) / "18_sine_gordon_topological_breather.wav").string();
+    if (aether::WavWriter::write_stereo_wav(sgb_path, sgb_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << sgb_path << "\n";
+    }
+
+    // Render 19: Acoustic Black Hole & Sonic Horizon Waveguide
+    std::cout << "Rendering \033[1m19_acoustic_black_hole_horizon.wav\033[0m (Sonic Event Horizon & Hawking Radiation)... ";
+    std::cout.flush();
+    aether::engines::AcousticBlackHole abh(SAMPLE_RATE);
+    abh.configure(2.4f, 0.10f, 0.009f, 0.035f);
+    abh.strike(0.88f, 0.95f);
+
+    constexpr size_t ABH_SAMPLES = SAMPLE_RATE * 4;
+    std::vector<aether::StereoFrame> abh_frames(ABH_SAMPLES);
+    for (size_t s = 0; s < ABH_SAMPLES; ++s) {
+        if (s == SAMPLE_RATE * 1 || s == static_cast<size_t>(SAMPLE_RATE * 2.2)) {
+            abh.strike(0.85f, 0.80f);
+        }
+        abh_frames[s] = abh.process();
+    }
+    const std::string abh_path = (fs::path(final_out_dir) / "19_acoustic_black_hole_horizon.wav").string();
+    if (aether::WavWriter::write_stereo_wav(abh_path, abh_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << abh_path << "\n";
+    }
+
     // Export Standard MIDI File
     std::cout << "Exporting \033[1mfibonacci_score.mid\033[0m (Standard MIDI Format 1)... ";
     aether::midi::MidiFile mf;
@@ -640,6 +780,12 @@ void render_all_presets(const std::string& output_dir) {
 
     aether::AetherPresetData p_bowl{"Singing Bowl (Stribeck Friction)", 4, 0.25f, 0.001f, 1.2f, 432.0f, 1.8f, 0.95f, 0.50f, "Slendro"};
     aether::PresetManager::save_preset((fs::path(final_presets_dir) / "singing_bowl.aether").string(), p_bowl);
+
+    aether::AetherPresetData p_breather{"Sine-Gordon Breather", 9, 0.42f, 0.0006f, 1.0f, 220.0f, 1.0f, 0.85f, 0.30f, "Bohlen-Pierce"};
+    aether::PresetManager::save_preset((fs::path(final_presets_dir) / "sine_gordon_breather.aether").string(), p_breather);
+
+    aether::AetherPresetData p_black_hole{"Acoustic Black Hole", 10, 0.45f, 0.008f, 2.2f, 180.0f, 1.0f, 0.88f, 0.35f, "12-EDO"};
+    aether::PresetManager::save_preset((fs::path(final_presets_dir) / "acoustic_black_hole.aether").string(), p_black_hole);
     std::cout << "\033[1;32m[DONE]\033[0m\n\n";
 }
 
@@ -697,7 +843,7 @@ void run_live_interactive() {
     std::cout << "\033[1;36m[LIVE SYNTHESIZER READY]\033[0m Audio streaming active at 48kHz stereo.\n";
     std::cout << "Controls:\n";
     std::cout << "  Notes      : \033[1m[A] [W] [S] [E] [D] [F] [T] [G] [Y] [H] [U] [J] [K]\033[0m\n";
-    std::cout << "  Presets    : \033[1m[1] Bell   [2] Gong   [3] Drone   [4] Aether   [5] Bowed\033[0m\n";
+    std::cout << "  Presets    : \033[1m[1] Bell  [2] Gong  [3] Drone  [4] Aether  [5] Bowed  [6] VK-Plate  [7] Horn  [8] Chaos  [9] Jawari  [0] Breather  [-] BlackHole\033[0m\n";
     std::cout << "  Tuning     : \033[1m[ [ ] Previous Scale    [ ] ] Next Scale\033[0m\n";
     std::cout << "  Quit       : \033[1;31m[Q] or [ESC]\033[0m\n\n";
 
@@ -731,6 +877,30 @@ void run_live_interactive() {
                 case '5':
                     engine.load_preset(aether::Preset::BowedCrystalPlate);
                     current_preset_name = "Bowed Crystal Plate";
+                    break;
+                case '6':
+                    engine.load_preset(aether::Preset::VonKarmanTurbulentGong);
+                    current_preset_name = "Von Karman Gong";
+                    break;
+                case '7':
+                    engine.load_preset(aether::Preset::PseudosphereTractrixHorn);
+                    current_preset_name = "Pseudosphere Horn";
+                    break;
+                case '8':
+                    engine.load_preset(aether::Preset::HenonHeilesChaos);
+                    current_preset_name = "Henon-Heiles Chaos";
+                    break;
+                case '9':
+                    engine.load_preset(aether::Preset::HyperbolicStringJawari);
+                    current_preset_name = "Sitar Jawari String";
+                    break;
+                case '0':
+                    engine.load_preset(aether::Preset::SineGordonBreather);
+                    current_preset_name = "Sine-Gordon Breather";
+                    break;
+                case '-':
+                    engine.load_preset(aether::Preset::AcousticBlackHole);
+                    current_preset_name = "Acoustic Black Hole";
                     break;
 
                 // Scale cycling
@@ -796,6 +966,9 @@ int main(int argc, char** argv) {
             do_bench = false;
             do_render = false;
             do_ascii = false;
+        } else if (arg == "--fft-bench") {
+            run_fft_benchmark();
+            return 0;
         } else if (arg == "--resynthesize" && i + 2 < argc) {
             std::string in_file = argv[++i];
             std::string out_file = argv[++i];
@@ -835,6 +1008,7 @@ int main(int argc, char** argv) {
             std::cout << "  --live, -l                       Launch live interactive synthesizer with audio hardware\n";
             std::cout << "  --play <in.wav>                  Play audio file with live rolling Braille oscilloscope & VU meter\n";
             std::cout << "  --sweep-bench                    Run spatial resolution FDTD scaling sweep\n";
+            std::cout << "  --fft-bench                      Run Radix-2 Cooley-Tukey FFT throughput benchmark\n";
             std::cout << "  --resynthesize <in.wav> <out.wav> Process and resynthesize WAV file through hyperbolic waveguide\n";
             std::cout << "  --visualize <in.wav>             Render Unicode Braille waveform oscilloscope in terminal\n";
             std::cout << "  --spectrogram <in.wav>           Render 2D Time-Frequency Braille spectrogram in terminal\n";

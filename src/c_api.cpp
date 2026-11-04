@@ -35,6 +35,27 @@ AETHER_API void aether_engine_load_preset(aether_engine_handle_t handle, int pre
         case AETHER_PRESET_AETHER_SPACE:
             engine->load_preset(aether::Preset::HyperbolicAetherSpace);
             break;
+        case AETHER_PRESET_BOWED_CRYSTAL:
+            engine->load_preset(aether::Preset::BowedCrystalPlate);
+            break;
+        case AETHER_PRESET_VON_KARMAN_GONG:
+            engine->load_preset(aether::Preset::VonKarmanTurbulentGong);
+            break;
+        case AETHER_PRESET_PSEUDOSPHERE_HORN:
+            engine->load_preset(aether::Preset::PseudosphereTractrixHorn);
+            break;
+        case AETHER_PRESET_HENON_HEILES_CHAOS:
+            engine->load_preset(aether::Preset::HenonHeilesChaos);
+            break;
+        case AETHER_PRESET_HYPERBOLIC_STRING:
+            engine->load_preset(aether::Preset::HyperbolicStringJawari);
+            break;
+        case AETHER_PRESET_SINE_GORDON_BREATHER:
+            engine->load_preset(aether::Preset::SineGordonBreather);
+            break;
+        case AETHER_PRESET_ACOUSTIC_BLACK_HOLE:
+            engine->load_preset(aether::Preset::AcousticBlackHole);
+            break;
         default:
             engine->load_preset(aether::Preset::HyperbolicCosmicBell);
             break;

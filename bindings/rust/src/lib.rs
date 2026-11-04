@@ -9,6 +9,13 @@ pub enum Preset {
     ChladniGong = 1,
     ChaoticDrone = 2,
     AetherSpace = 3,
+    BowedCrystal = 4,
+    VonKarmanGong = 5,
+    PseudosphereHorn = 6,
+    HenonHeilesChaos = 7,
+    HyperbolicString = 8,
+    SineGordonBreather = 9,
+    AcousticBlackHole = 10,
 }
 
 extern "C" {

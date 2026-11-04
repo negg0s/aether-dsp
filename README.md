@@ -9,7 +9,7 @@
 [![CLAP](https://img.shields.io/badge/Plugin-CLAP%20Native%20Standard-red)](#)
 [![Audio](https://img.shields.io/badge/Audio-WASAPI%20%7C%20CoreAudio%20%7C%20ALSA%20%7C%20WebAudio-success)](#)
 [![MIDI](https://img.shields.io/badge/MIDI-SMF%20Format%200%2F1-yellow)](#)
-[![Tests](https://img.shields.io/badge/Tests-31%20Invariant%20Tests%20Passed-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/Tests-35%20Invariant%20Tests%20Passed-brightgreen)](#)
 [![Zero-AI](https://img.shields.io/badge/Engine-100%25%20Pure%20Math%20%26%20DSP%20(No%20AI)-orange)](#)
 
 ```
@@ -36,6 +36,14 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
   Implements Cayley transforms $\mathbb{D} \leftrightarrow \mathbb{H}^2$ and Möbius transformation matrices for non-harmonic acoustic diffusion delay lines with zero comb filtering.
 - **Hamiltonian Geodesic Sound Ray Tracer & Manifold Convolution Reverb:**
   Integrates Christoffel geodesic equations $\ddot{x}^i + \Gamma^i_{jk}\dot{x}^j\dot{x}^k = 0$ using 4th-order Runge-Kutta numerical integration to trace acoustic rays along curved hyperbolic geodesics and synthesize Manifold Impulse Responses (MIR).
+- **Bolza Surface Genus-2 Hyperbolic Compact Universe:**
+  Acoustic wave propagation on the Bolza surface $\mathbb{H}^2/\Gamma$ (the maximally symmetric compact Riemann surface of genus 2). Uses the regular hyperbolic octagonal fundamental domain ($R = 2^{-1/4} \approx 0.840896$) and Fuchsian side-pairing Möbius isometries to wrap wavefronts ergodically without boundary damping.
+- **Zero-Latency Uniform Partitioned Overlap-Save (UPOLS) FFT Convolution Engine:**
+  High-throughput partitioned frequency-domain convolution ($O(P \cdot B \log B)$) executing arbitrary impulse responses up to 65,536+ samples with zero sub-block processing delay and constant CPU cache footprint.
+- **Sine-Gordon Integrable Topological Solitons & Breathers:**
+  Simulates the 1+1D nonlinear relativistic field equation $\partial_{tt}\phi - c^2 \partial_{xx}\phi + \omega_0^2 \sin\phi + \gamma \partial_t\phi = 0$ via symplectic Störmer-Verlet integration. Generates pulsating localized Breather modes and topological Kink-Antikink pairs with rich organic subharmonic formants.
+- **Acoustic Black Hole (ABH) & Sonic Horizon Waveguide:**
+  Models retarding acoustic metamaterials with power-law phase velocity grading $c(x) = c_0 (x/L)^\alpha + c_{\min}$. High frequencies undergo infinite spatial compression ($k \to \infty$) and time dilation at the event horizon, paired with stimulated Unruh-Hawking thermal phonon emission.
 - **AVX2 SIMD Vectorized FDTD Kernel:**
   Processes 8 spatial grid cells per instruction using 8-wide vectorized fused multiply-add (`_mm256_fmadd_ps`) operations.
 - **Beltrami Pseudosphere Tractrix Horn Resonator:**
@@ -206,6 +214,10 @@ Drive the Poincaré hyperbolic waveguide with any external audio sample:
 | `13_polyphonic_microtonal_cathedral.wav` | 32-bit Float WAV | 8-Voice polyphonic Bohlen-Pierce microtonal chord progression on Chladni resonators |
 | `14_sitar_hyperbolic_jawari.wav` | 32-bit Float WAV | Nonlinear stiff Kirchhoff string with dynamic tension modulation & buzzing Jawari bridge |
 | `15_hyperbolic_ball_3d_spatial.wav` | 32-bit Float WAV | 3D Poincaré Ball (H^3) non-Euclidean binaural orbit with exponential horizon dropoff |
+| `16_bolza_compact_universe.wav` | 32-bit Float WAV | Bolza genus-2 compact Riemann surface reverb with ergodic Fuchsian side-pairing |
+| `17_partitioned_hyperbolic_cathedral.wav` | 32-bit Float WAV | Zero-latency uniform partitioned overlap-save FFT convolution with 1.8s manifold tail |
+| `18_sine_gordon_topological_breather.wav` | 32-bit Float WAV | Relativistic Sine-Gordon field with pulsating localized Breathers & Kink-Antikink collisions |
+| `19_acoustic_black_hole_horizon.wav` | 32-bit Float WAV | Retarding metamaterial waveguide with sonic event horizon & stimulated Hawking phonon radiation |
 | `fibonacci_score.mid` | Standard MIDI Format 1 | Exported polyphonic score ready for DAW import (Ableton/FL Studio) |
 | `chladni_nodal_lines.svg` | Scalable Vector Graphics | 800x800 high-res vector visualization of Chladni nodal plate |
 | `poincare_tiling.svg` | Scalable Vector Graphics | 800x800 high-res vector art of Poincaré {7,3} hyperbolic tessellation |
@@ -239,6 +251,7 @@ aether-dsp/
 │   │   ├── poincare.hpp           # Riemannian metric, conformal factors, geodesic distance
 │   │   ├── runge_kutta.hpp        # 4th-order Runge-Kutta ODE numerical solver
 │   │   ├── fft.hpp                # Radix-2 Cooley-Tukey FFT & spectral power estimation
+│   │   ├── bolza_surface.hpp      # Bolza genus-2 compact Riemann surface & Fuchsian octagonal isometries
 │   │   ├── hyperbolic_tiling.hpp  # Non-Euclidean {7, 3} & {5, 4} tessellation generator
 │   │   ├── hyperbolic_halfplane.hpp # Upper Half-Plane H^2, Cayley map & SL(2, Z) Mobius
 │   │   ├── geodesic_raytracer.hpp # Hamiltonian geodesic sound ray tracer on curved manifolds
@@ -252,6 +265,7 @@ aether-dsp/
 │   │   └── fx/
 │   │       ├── hyperbolic_reverb.hpp # 4-channel unitary Householder FDN reverb
 │   │       ├── convolution_reverb.hpp# Time-domain convolution for Manifold Impulse Responses
+│   │       ├── partitioned_convolution.hpp # Zero-latency uniform partitioned overlap-save FFT convolution
 │   │       ├── binaural_panner.hpp   # 3D Woodworth spherical head binaural spatializer
 │   │       └── hyperbolic_spatializer_3d.hpp # 3D Poincare Ball (H^3) acoustic spatializer
 │   └── engines/
@@ -260,6 +274,8 @@ aether-dsp/
 │       ├── von_karman_plate.hpp     # Nonlinear large-deflection plate with shimmering crescendo
 │       ├── pseudosphere_horn.hpp    # Beltrami pseudosphere tractrix Webster acoustic horn
 │       ├── hyperbolic_string.hpp    # Nonlinear stiff string with tension modulation & Jawari bridge
+│       ├── sine_gordon_breather.hpp # Integrable Sine-Gordon topological soliton & breather resonator
+│       ├── acoustic_black_hole.hpp  # Metamaterial acoustic black hole & Unruh sonic horizon
 │       ├── stick_slip_exciter.hpp   # Stribeck non-linear friction stick-slip continuous exciter
 │       ├── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
 │       └── hamiltonian_chaos.hpp    # Hénon-Heiles galactic gravitational chaos oscillator
@@ -271,7 +287,7 @@ aether-dsp/
 │   ├── audio_device.cpp           # Miniaudio hardware backend compilation unit
 │   └── c_api.cpp                  # C-ABI implementation
 ├── tests/
-│   └── unit_tests.cpp             # 31 extended mathematical invariants & audio stability tests
+│   └── unit_tests.cpp             # 35 extended mathematical invariants & audio stability tests
 ├── examples/
 │   ├── python_demo.py             # Python ctypes zero-dependency integration demo
 │   └── spectral_analysis.py       # Pure-Python physical inharmonicity & DFT spectral analyzer
@@ -283,7 +299,9 @@ aether-dsp/
 ├── presets/
 │   ├── cosmic_bell.aether         # Poincaré disk hyperbolic resonator preset
 │   ├── singing_bowl.aether        # Stribeck stick-slip friction singing bowl preset
-│   └── tibetan_gong.aether        # Kirchhoff-Love thin elastic plate gong preset
+│   ├── tibetan_gong.aether        # Kirchhoff-Love thin elastic plate gong preset
+│   ├── sine_gordon_breather.aether # Relativistic Sine-Gordon breather preset
+│   └── acoustic_black_hole.aether # Sonic event horizon waveguide preset
 ├── web/
 │   ├── index.html                 # Standalone interactive browser GUI & 3D wireframe
 │   └── app.js                     # 3D Canvas visualizer, sand physics & Web Audio synth

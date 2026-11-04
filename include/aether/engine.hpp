@@ -15,6 +15,8 @@
 #include "engines/pseudosphere_horn.hpp"
 #include "engines/hamiltonian_chaos.hpp"
 #include "engines/hyperbolic_string.hpp"
+#include "engines/sine_gordon_breather.hpp"
+#include "engines/acoustic_black_hole.hpp"
 #include "dsp/fx/hyperbolic_spatializer_3d.hpp"
 #include "polyphony.hpp"
 #include <span>
@@ -32,7 +34,9 @@ enum class Preset {
     VonKarmanTurbulentGong,  // Nonlinear thin plate large-deflection Duffing pitch glide & shimmering crescendo
     PseudosphereTractrixHorn,// Beltrami pseudosphere tractrix horn Webster flare solver with lip-reed excitation
     HenonHeilesChaos,        // Galactic axisymmetric gravitational Hamiltonian chaos with 4th-order Yoshida integration
-    HyperbolicStringJawari   // Nonlinear stiff Kirchhoff string with tension modulation & buzzing jawari obstacle
+    HyperbolicStringJawari,  // Nonlinear stiff Kirchhoff string with tension modulation & buzzing jawari obstacle
+    SineGordonBreather,      // Integrable relativistic topological soliton & pulsating breather field
+    AcousticBlackHole        // Retarding acoustic metamaterial waveguide with Unruh sonic horizon & Hawking radiation
 };
 
 /**
@@ -50,7 +54,9 @@ public:
           pseudosphere_(sample_rate),
           polyphony_(sample_rate),
           string_(sample_rate),
-          spatializer3d_(sample_rate) {
+          spatializer3d_(sample_rate),
+          sine_gordon_(sample_rate),
+          acoustic_bh_(sample_rate) {
         init();
     }
 
@@ -131,6 +137,23 @@ public:
                 filter_r_.configure(dsp::FilterType::Lowpass, 18000.0f, 0.707f, static_cast<float>(sample_rate_));
                 reverb_.configure(0.80f, 0.22f, 0.28f);
                 break;
+
+            case Preset::SineGordonBreather:
+                sine_gordon_.reset();
+                sine_gordon_.configure(0.42f, 220.0f, 0.0006f);
+                sine_gordon_.inject_breather(0.5f, 0.72f, 1.2f);
+                filter_l_.configure(dsp::FilterType::Lowpass, 14000.0f, 0.707f, static_cast<float>(sample_rate_));
+                filter_r_.configure(dsp::FilterType::Lowpass, 14000.0f, 0.707f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.85f, 0.22f, 0.30f);
+                break;
+
+            case Preset::AcousticBlackHole:
+                acoustic_bh_.reset();
+                acoustic_bh_.configure(2.2f, 0.12f, 0.008f, 0.04f);
+                filter_l_.configure(dsp::FilterType::Lowpass, 16000.0f, 0.707f, static_cast<float>(sample_rate_));
+                filter_r_.configure(dsp::FilterType::Lowpass, 16000.0f, 0.707f, static_cast<float>(sample_rate_));
+                reverb_.configure(0.88f, 0.25f, 0.32f);
+                break;
         }
     }
 
@@ -164,6 +187,14 @@ public:
         if (current_preset_ == Preset::HyperbolicStringJawari) {
             string_.pluck(strike_coord.x * 0.4f + 0.5f, velocity, 0.08f);
         }
+
+        if (current_preset_ == Preset::SineGordonBreather) {
+            sine_gordon_.strike(strike_coord.x * 0.5f + 0.25f, velocity);
+        }
+
+        if (current_preset_ == Preset::AcousticBlackHole) {
+            acoustic_bh_.strike(strike_coord.x * 0.4f + 0.5f, velocity);
+        }
     }
 
     /**
@@ -177,6 +208,9 @@ public:
             von_karman_.init_modes(freq * 0.5f, 1.2f, 0.7f);
         } else if (current_preset_ == Preset::HyperbolicStringJawari) {
             string_.set_pitch(freq);
+        } else if (current_preset_ == Preset::SineGordonBreather) {
+            sine_gordon_.configure(0.42f, freq, 0.0006f);
+            sine_gordon_.inject_breather(0.5f, 0.72f, 1.0f);
         }
         note_on(strike_coord, velocity);
     }
@@ -271,6 +305,16 @@ public:
                     sample = string_.step();
                     break;
                 }
+
+                case Preset::SineGordonBreather: {
+                    sample = sine_gordon_.process();
+                    break;
+                }
+
+                case Preset::AcousticBlackHole: {
+                    sample = acoustic_bh_.process();
+                    break;
+                }
             }
 
             // Mix in active polyphonic chord voices if any
@@ -302,6 +346,8 @@ public:
     [[nodiscard]] engines::PseudosphereHorn& pseudosphere() noexcept { return pseudosphere_; }
     [[nodiscard]] engines::HenonHeilesOscillator& henon_heiles() noexcept { return henon_heiles_; }
     [[nodiscard]] engines::HyperbolicString& string() noexcept { return string_; }
+    [[nodiscard]] engines::SineGordonBreather& sine_gordon() noexcept { return sine_gordon_; }
+    [[nodiscard]] engines::AcousticBlackHole& acoustic_bh() noexcept { return acoustic_bh_; }
     [[nodiscard]] dsp::fx::HyperbolicSpatializer3D& spatializer3d() noexcept { return spatializer3d_; }
     [[nodiscard]] PolyphonyManager<8>& polyphony() noexcept { return polyphony_; }
     [[nodiscard]] dsp::TuningSystem& tuning() noexcept { return tuning_; }
@@ -320,6 +366,8 @@ private:
     engines::PseudosphereHorn pseudosphere_;
     engines::HenonHeilesOscillator henon_heiles_;
     engines::HyperbolicString string_;
+    engines::SineGordonBreather sine_gordon_;
+    engines::AcousticBlackHole acoustic_bh_;
     dsp::fx::HyperbolicSpatializer3D spatializer3d_;
     PolyphonyManager<8> polyphony_;
 

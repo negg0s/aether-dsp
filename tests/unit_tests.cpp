@@ -30,6 +30,8 @@
 #include "aether/engines/hyperbolic_string.hpp"
 #include "aether/dsp/fx/hyperbolic_spatializer_3d.hpp"
 #include "aether/math/fft.hpp"
+#include "aether/math/bolza_surface.hpp"
+#include "aether/dsp/fx/partitioned_convolution.hpp"
 #include "aether/engine.hpp"
 #include <iostream>
 #include <cassert>
@@ -558,7 +560,7 @@ void test_henon_heiles_chaos() {
 }
 
 void test_engine_presets() {
-    std::cout << "[TEST] Master Engine 9-Preset Audio Rendering... ";
+    std::cout << "[TEST] Master Engine 11-Preset Complete Audio Rendering... ";
     aether::Engine engine(48000);
     std::vector<aether::StereoFrame> block(256);
 
@@ -571,7 +573,9 @@ void test_engine_presets() {
         aether::Preset::VonKarmanTurbulentGong,
         aether::Preset::PseudosphereTractrixHorn,
         aether::Preset::HenonHeilesChaos,
-        aether::Preset::HyperbolicStringJawari
+        aether::Preset::HyperbolicStringJawari,
+        aether::Preset::SineGordonBreather,
+        aether::Preset::AcousticBlackHole
     };
 
     for (auto preset : presets) {
@@ -687,8 +691,116 @@ void test_hyperbolic_spatializer_3d() {
     std::cout << "PASSED\n";
 }
 
+void test_partitioned_convolution() {
+    std::cout << "[TEST] Zero-Latency Partitioned Overlap-Save FFT Convolution... ";
+    using aether::dsp::fx::PartitionedConvolution;
+
+    // Synthetic 512-sample exponential decay impulse response
+    constexpr size_t IR_LEN = 512;
+    std::vector<float> ir(IR_LEN);
+    for (size_t i = 0; i < IR_LEN; ++i) {
+        ir[i] = std::exp(-static_cast<float>(i) * 0.02f);
+    }
+
+    PartitionedConvolution conv;
+    conv.load_impulse_response(ir, 0.6f);
+    // 512 samples / 128 block size = 4 partitions
+    assert(conv.num_partitions() == 4);
+
+    // Feed a block of audio and ensure no NaNs and output energy exists
+    std::vector<aether::StereoFrame> test_input(256, aether::StereoFrame{0.5f, 0.5f});
+    conv.process_block(test_input);
+
+    for (const auto& f : test_input) {
+        assert(!std::isnan(f.left) && !std::isnan(f.right));
+        assert(!std::isinf(f.left) && !std::isinf(f.right));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_bolza_surface_fuchsian_group() {
+    std::cout << "[TEST] Bolza Genus-2 Surface & Fuchsian Octagon Isometries... ";
+    using aether::math::BolzaSurface;
+
+    auto vertices = BolzaSurface::get_octagon_vertices();
+    assert(vertices.size() == 8);
+
+    // Check all vertices are at radius R = 2^(-1/4) ~= 0.840896
+    for (const auto& v : vertices) {
+        const float r = std::sqrt(v.x * v.x + v.y * v.y);
+        assert(std::abs(r - BolzaSurface::VERTEX_RADIUS) < 1e-4f);
+    }
+
+    // Origin is inside the fundamental domain
+    assert(BolzaSurface::is_inside_fundamental_domain({0.0f, 0.0f}));
+
+    // Test side-pairing wrapping: mapped point must remain inside unit disk |z| < 1
+    aether::Vec2 boundary_point{0.82f, 0.0f};
+    aether::Vec2 wrapped = BolzaSurface::wrap_point(boundary_point, 0);
+    const float r_wrap = std::sqrt(wrapped.x * wrapped.x + wrapped.y * wrapped.y);
+    assert(r_wrap < 1.0f);
+
+    // Test Bolza Manifold Impulse Response synthesis
+    auto ir = BolzaSurface::synthesize_bolza_ir(48000, 0.2f);
+    assert(!ir.empty());
+    bool non_zero = false;
+    for (float sample : ir) {
+        assert(!std::isnan(sample));
+        if (std::abs(sample) > 0.01f) non_zero = true;
+    }
+    assert(non_zero);
+    std::cout << "PASSED\n";
+}
+
+void test_sine_gordon_breather() {
+    std::cout << "[TEST] Sine-Gordon Topological Soliton & Breather... ";
+    aether::engines::SineGordonBreather sgb(48000);
+    sgb.configure(0.40f, 320.0f, 0.0005f);
+
+    // Test breather injection
+    sgb.inject_breather(0.5f, 0.70f, 1.0f);
+    assert(sgb.total_energy() > 0.0f);
+
+    for (int i = 0; i < 600; ++i) {
+        auto frame = sgb.process();
+        assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+        assert(!std::isinf(frame.left) && !std::isinf(frame.right));
+        assert(std::abs(frame.left) <= 1.0f);
+        assert(std::abs(frame.right) <= 1.0f);
+    }
+
+    // Test Kink-Antikink collision
+    sgb.inject_kink_antikink(0.4f, 0.65f);
+    for (int i = 0; i < 600; ++i) {
+        auto frame = sgb.process();
+        assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_acoustic_black_hole() {
+    std::cout << "[TEST] Acoustic Black Hole & Sonic Horizon Waveguide... ";
+    aether::engines::AcousticBlackHole abh(48000);
+    abh.configure(2.4f, 0.10f, 0.01f, 0.05f);
+
+    // Strike incident wave
+    abh.strike(0.85f, 0.9f);
+
+    bool non_zero = false;
+    for (int i = 0; i < 1000; ++i) {
+        auto frame = abh.process();
+        assert(!std::isnan(frame.left) && !std::isnan(frame.right));
+        assert(!std::isinf(frame.left) && !std::isinf(frame.right));
+        if (std::abs(frame.left) > 0.01f || std::abs(frame.right) > 0.01f) {
+            non_zero = true;
+        }
+    }
+    assert(non_zero);
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (31 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (35 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -719,7 +831,11 @@ int main() {
     test_fft_spectral_transform();
     test_hyperbolic_string_jawari();
     test_hyperbolic_spatializer_3d();
+    test_partitioned_convolution();
+    test_bolza_surface_fuchsian_group();
+    test_sine_gordon_breather();
+    test_acoustic_black_hole();
     test_engine_presets();
-    std::cout << "\033[1;32mALL 31 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    std::cout << "\033[1;32mALL 35 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

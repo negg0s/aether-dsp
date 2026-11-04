@@ -1,0 +1,12 @@
+# AetherDSP Preset Configuration File
+version = 1.0
+name = Acoustic Black Hole
+preset_id = 10
+wave_speed = 0.45
+damping = 0.008
+curvature_scale = 2.2
+plate_fundamental = 180
+plate_stiffness = 1
+reverb_decay = 0.88
+reverb_mix = 0.35
+tuning_scale = 12-EDO
