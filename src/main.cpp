@@ -8,6 +8,8 @@
 #include "aether/math/hyperbolic_halfplane.hpp"
 #include "aether/math/geodesic_raytracer.hpp"
 #include "aether/engines/von_karman_plate.hpp"
+#include "aether/engines/pseudosphere_horn.hpp"
+#include "aether/math/yoshida_integrator.hpp"
 #include "aether/dsp/fx/convolution_reverb.hpp"
 #include "aether/ui/terminal_visualizer.hpp"
 #include "aether/audio/playback_device.hpp"
@@ -114,6 +116,18 @@ void visualize_audio_file(const std::string& wav_file) {
     }
     std::cout << "\033[1;32m[OK]\033[0m (" << audio.sample_rate << " Hz, " << audio.frames.size() << " frames)\n\n";
     aether::ui::TerminalVisualizer::display_waveform(audio.frames, 72, 12);
+}
+
+void spectrogram_audio_file(const std::string& wav_file) {
+    std::cout << "\033[1;36m=== High-Resolution 2D Time-Frequency Braille Spectrogram ===\033[0m\n";
+    std::cout << "Loading: " << wav_file << "... ";
+    auto audio = aether::WavReader::read_wav(wav_file);
+    if (!audio.valid) {
+        std::cerr << "\033[1;31m[ERROR] Failed to load audio file.\033[0m\n";
+        return;
+    }
+    std::cout << "\033[1;32m[OK]\033[0m (" << audio.sample_rate << " Hz, " << audio.frames.size() << " frames)\n\n";
+    aether::ui::TerminalVisualizer::display_spectrogram(audio.frames, audio.sample_rate, 64, 18);
 }
 
 void play_wav_live(const std::string& wav_file) {
@@ -394,6 +408,25 @@ void render_all_presets(const std::string& output_dir) {
         std::cout << "\033[1;32m[DONE]\033[0m -> " << gong_path << "\n";
     }
 
+    // Render 11: Beltrami Pseudosphere Tractrix Horn Acoustic Flare
+    std::cout << "Rendering \033[1m11_pseudosphere_tractrix_horn.wav\033[0m (Beltrami Pseudosphere Webster Horn)... ";
+    std::cout.flush();
+    aether::engines::PseudosphereHorn horn(SAMPLE_RATE);
+    horn.excite_throat(1.0f);
+
+    constexpr size_t HORN_SAMPLES = SAMPLE_RATE * 3;
+    std::vector<aether::StereoFrame> horn_frames(HORN_SAMPLES);
+    for (size_t s = 0; s < HORN_SAMPLES; ++s) {
+        if (s % (SAMPLE_RATE / 2) == 0 && s < SAMPLE_RATE * 2) {
+            horn.excite_throat(0.8f);
+        }
+        horn_frames[s] = horn.step();
+    }
+    const std::string horn_path = (fs::path(output_dir) / "11_pseudosphere_tractrix_horn.wav").string();
+    if (aether::WavWriter::write_stereo_wav(horn_path, horn_frames, SAMPLE_RATE, true)) {
+        std::cout << "\033[1;32m[DONE]\033[0m -> " << horn_path << "\n";
+    }
+
     // Export Standard MIDI File
     std::cout << "Exporting \033[1mfibonacci_score.mid\033[0m (Standard MIDI Format 1)... ";
     aether::midi::MidiFile mf;
@@ -612,6 +645,10 @@ int main(int argc, char** argv) {
             std::string wav_file = argv[++i];
             visualize_audio_file(wav_file);
             return 0;
+        } else if (arg == "--spectrogram" && i + 1 < argc) {
+            std::string wav_file = argv[++i];
+            spectrogram_audio_file(wav_file);
+            return 0;
         } else if (arg == "--export-svg") {
             std::cout << "\033[1;36m=== Exporting High-Resolution Mathematical Vector Graphics (SVG) ===\033[0m\n";
             fs::create_directories("output");
@@ -633,6 +670,7 @@ int main(int argc, char** argv) {
             std::cout << "  --sweep-bench                    Run spatial resolution FDTD scaling sweep\n";
             std::cout << "  --resynthesize <in.wav> <out.wav> Process and resynthesize WAV file through hyperbolic waveguide\n";
             std::cout << "  --visualize <in.wav>             Render Unicode Braille waveform oscilloscope in terminal\n";
+            std::cout << "  --spectrogram <in.wav>           Render 2D Time-Frequency Braille spectrogram in terminal\n";
             std::cout << "  --export-svg                     Export high-resolution Chladni and Poincare SVG vectors\n";
             std::cout << "  --bench                          Run AVX2 SIMD DSP throughput benchmark\n";
             std::cout << "  --render                         Render lossless audio presets & MIDI to output/*\n";

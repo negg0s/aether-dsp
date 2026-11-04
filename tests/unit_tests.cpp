@@ -19,6 +19,8 @@
 #include "aether/math/geodesic_raytracer.hpp"
 #include "aether/math/hyperbolic_halfplane.hpp"
 #include "aether/engines/von_karman_plate.hpp"
+#include "aether/engines/pseudosphere_horn.hpp"
+#include "aether/math/yoshida_integrator.hpp"
 #include "aether/dsp/fx/convolution_reverb.hpp"
 #include "aether/ui/terminal_visualizer.hpp"
 #include "aether/plugin/clap_entry.hpp"
@@ -443,8 +445,58 @@ void test_hyperbolic_halfplane() {
     std::cout << "PASSED\n";
 }
 
+void test_pseudosphere_horn() {
+    std::cout << "[TEST] Beltrami Pseudosphere Tractrix Horn... ";
+    aether::engines::PseudosphereHorn horn(48000);
+    assert(horn.bell_cutoff_frequency() > 100.0f);
+
+    horn.excite_throat(1.0f);
+    for (int i = 0; i < 500; ++i) {
+        auto frame = horn.step();
+        assert(!std::isnan(frame.left));
+        assert(!std::isnan(frame.right));
+        assert(!std::isinf(frame.left));
+        assert(!std::isinf(frame.right));
+        assert(std::abs(frame.left) <= 1.0f);
+        assert(std::abs(frame.right) <= 1.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_yoshida_integrator() {
+    std::cout << "[TEST] 4th-Order Symplectic Yoshida Integrator... ";
+    using aether::math::Yoshida4thIntegrator;
+    Yoshida4thIntegrator::State state{1.0, 0.0}; // Initial position = 1, velocity = 0
+    constexpr double omega2 = 4.0; // Harmonic oscillator: V(q) = 0.5 * omega2 * q^2
+
+    auto force = [](double q) noexcept { return -omega2 * q; };
+    auto potential = [](double q) noexcept { return 0.5 * omega2 * q * q; };
+
+    const double e0 = Yoshida4thIntegrator::total_energy(state, potential);
+    assert(std::abs(e0 - 2.0) < 1e-9);
+
+    constexpr double dt = 0.005;
+    for (int step = 0; step < 10000; ++step) {
+        Yoshida4thIntegrator::step(state, dt, force);
+    }
+
+    const double e_final = Yoshida4thIntegrator::total_energy(state, potential);
+    // Symplectic preservation: energy drift must remain bounded without secular growth
+    const double rel_error = std::abs((e_final - e0) / e0);
+    assert(rel_error < 1e-4);
+    std::cout << "PASSED\n";
+}
+
+void test_braille_spectrogram() {
+    std::cout << "[TEST] 2D Time-Frequency Braille Canvas... ";
+    std::vector<aether::StereoFrame> test_frames(1024, aether::StereoFrame{0.5f, 0.5f});
+    // Visualizer runs without throwing or memory corruption
+    aether::ui::TerminalVisualizer::display_spectrogram(test_frames, 48000, 20, 6);
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (22 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (25 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -467,6 +519,9 @@ int main() {
     test_braille_visualizer();
     test_von_karman_plate();
     test_hyperbolic_halfplane();
-    std::cout << "\033[1;32mALL 22 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_pseudosphere_horn();
+    test_yoshida_integrator();
+    test_braille_spectrogram();
+    std::cout << "\033[1;32mALL 25 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

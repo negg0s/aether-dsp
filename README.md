@@ -9,7 +9,7 @@
 [![CLAP](https://img.shields.io/badge/Plugin-CLAP%20Native%20Standard-red)](#)
 [![Audio](https://img.shields.io/badge/Audio-WASAPI%20%7C%20CoreAudio%20%7C%20ALSA%20%7C%20WebAudio-success)](#)
 [![MIDI](https://img.shields.io/badge/MIDI-SMF%20Format%200%2F1-yellow)](#)
-[![Tests](https://img.shields.io/badge/Tests-22%20Invariant%20Tests%20Passed-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/Tests-25%20Invariant%20Tests%20Passed-brightgreen)](#)
 [![Zero-AI](https://img.shields.io/badge/Engine-100%25%20Pure%20Math%20%26%20DSP%20(No%20AI)-orange)](#)
 
 ```
@@ -38,8 +38,12 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
   Integrates Christoffel geodesic equations $\ddot{x}^i + \Gamma^i_{jk}\dot{x}^j\dot{x}^k = 0$ using 4th-order Runge-Kutta numerical integration to trace acoustic rays along curved hyperbolic geodesics and synthesize Manifold Impulse Responses (MIR).
 - **AVX2 SIMD Vectorized FDTD Kernel:**
   Processes 8 spatial grid cells per instruction using 8-wide vectorized fused multiply-add (`_mm256_fmadd_ps`) operations.
-- **Terminal Unicode Braille Canvas, Oscilloscope & Real-Time Player:**
-  High-resolution sub-pixel graphics engine inside standard terminals using Unicode Braille Patterns (U+2800..U+28FF) for 30 FPS rolling oscilloscopes and dynamic TrueColor stereo VU meters via `./aether-dsp --play <wav>`.
+- **Beltrami Pseudosphere Tractrix Horn Resonator:**
+  Acoustic wave propagation inside an axisymmetric surface of constant negative Gaussian curvature $K = -1$. Solves the Webster Horn Equation with tractrix cross-sectional area $S(z) = \pi r^2 \operatorname{sech}^2(u)$, modeling brass acoustic flares and cutoff transmission frequencies without mouth reflections.
+- **4th-Order Symplectic Yoshida Integrator:**
+  Phase-space preserving geometric numerical integrator ($O(\Delta t^4)$ global accuracy) with Yoshida sub-step constants ($w_1 = \frac{1}{2 - 2^{1/3}}$), ensuring exact conservation of the shadow Hamiltonian and zero energy drift over millions of samples.
+- **Terminal Unicode Braille 2D Spectrogram & Oscilloscope:**
+  High-resolution sub-pixel graphics engine inside standard terminals using Unicode Braille Patterns (U+2800..U+28FF) for 30 FPS rolling oscilloscopes, dynamic TrueColor stereo VU meters (`--play <wav>`), and 2D Time-Frequency spectral waterfalls (`--spectrogram <wav>`).
 - **Stribeck Stick-Slip Non-Linear Friction Exciter:**
   Physically models continuous friction bowing (crystal singing bowls, glass harmonicas) with static/kinetic friction transitions and velocity thresholding.
 - **3D Binaural HRTF Spatializer (Woodworth Spherical Head Model):**
@@ -187,6 +191,7 @@ Drive the Poincaré hyperbolic waveguide with any external audio sample:
 | `08_bowed_crystal_plate.wav` | 32-bit Float WAV | Continuous Stribeck non-linear stick-slip friction crystal bowing |
 | `09_hyperbolic_geodesic_reverb.wav` | 32-bit Float WAV | Hamiltonian geodesic sound ray-traced convolution reverb |
 | `10_von_karman_turbulent_gong.wav` | 32-bit Float WAV | Large-deflection nonlinear modal coupling with shimmering crescendo |
+| `11_pseudosphere_tractrix_horn.wav` | 32-bit Float WAV | Beltrami Pseudosphere tractrix horn Webster acoustic transmission flare |
 | `fibonacci_score.mid` | Standard MIDI Format 1 | Exported polyphonic score ready for DAW import (Ableton/FL Studio) |
 | `chladni_nodal_lines.svg` | Scalable Vector Graphics | 800x800 high-res vector visualization of Chladni nodal plate |
 | `poincare_tiling.svg` | Scalable Vector Graphics | 800x800 high-res vector art of Poincaré {7,3} hyperbolic tessellation |
@@ -221,6 +226,7 @@ aether-dsp/
 │   │   ├── hyperbolic_tiling.hpp  # Non-Euclidean {7, 3} & {5, 4} tessellation generator
 │   │   ├── hyperbolic_halfplane.hpp # Upper Half-Plane H^2, Cayley map & SL(2, Z) Mobius
 │   │   ├── geodesic_raytracer.hpp # Hamiltonian geodesic sound ray tracer on curved manifolds
+│   │   ├── yoshida_integrator.hpp # 4th-order symplectic phase-space volume preserving integrator
 │   │   └── algorithmic_composer.hpp # Xenakis Sieve & Fibonacci score generator
 │   ├── dsp/
 │   │   ├── biquad.hpp             # Direct Form II Transposed biquad filter
@@ -235,6 +241,7 @@ aether-dsp/
 │       ├── hyperbolic_waveguide.hpp # AVX2 SIMD Non-Euclidean FDTD hyperbolic wave solver
 │       ├── chladni_plate.hpp        # Kirchhoff-Love 2D thin plate modal synthesizer
 │       ├── von_karman_plate.hpp     # Nonlinear large-deflection plate with shimmering crescendo
+│       ├── pseudosphere_horn.hpp    # Beltrami pseudosphere tractrix Webster acoustic horn
 │       ├── stick_slip_exciter.hpp   # Stribeck non-linear friction stick-slip continuous exciter
 │       └── chaotic_oscillator.hpp   # Lorenz, Rössler & Clifford strange attractors
 ├── bindings/
@@ -245,7 +252,7 @@ aether-dsp/
 │   ├── audio_device.cpp           # Miniaudio hardware backend compilation unit
 │   └── c_api.cpp                  # C-ABI implementation
 ├── tests/
-│   └── unit_tests.cpp             # 22 extended mathematical invariants & audio stability tests
+│   └── unit_tests.cpp             # 25 extended mathematical invariants & audio stability tests
 ├── examples/
 │   ├── python_demo.py             # Python ctypes zero-dependency integration demo
 │   └── spectral_analysis.py       # Pure-Python physical inharmonicity & DFT spectral analyzer

@@ -257,6 +257,60 @@ public:
 
         return canvas.render_ansi("\033[1;36m");
     }
+
+    /**
+     * @brief Render 2D Time-Frequency Spectrogram in High-Resolution Unicode Braille.
+     * Horizontal axis: Frequency [0..4000 Hz]
+     * Vertical axis: Time [0..Duration]
+     */
+    static void display_spectrogram(std::span<const StereoFrame> frames, uint32_t sample_rate, int char_w = 60, int char_h = 16) {
+        BrailleCanvas canvas(char_w, char_h);
+        const int px_w = canvas.pixel_width();
+        const int px_h = canvas.pixel_height();
+
+        if (frames.size() < 256) return;
+
+        constexpr size_t N_FFT = 256;
+        const size_t time_step = frames.size() / px_h;
+        const float max_freq = 4000.0f;
+        const float bin_hz = static_cast<float>(sample_rate) / N_FFT;
+
+        for (int py = 0; py < px_h; ++py) {
+            const size_t center_s = std::min(static_cast<size_t>(py * time_step + N_FFT / 2), frames.size() - 1);
+            const size_t start_s = center_s >= N_FFT / 2 ? center_s - N_FFT / 2 : 0;
+
+            for (int px = 0; px < px_w; ++px) {
+                const float target_f = (static_cast<float>(px) / px_w) * max_freq;
+                const int k = std::clamp(static_cast<int>(target_f / bin_hz), 0, static_cast<int>(N_FFT / 2 - 1));
+                const float omega = (2.0f * std::numbers::pi_v<float> * k) / N_FFT;
+
+                float real = 0.0f;
+                float imag = 0.0f;
+                for (size_t n = 0; n < N_FFT && (start_s + n) < frames.size(); n += 2) {
+                    const float mono = (frames[start_s + n].left + frames[start_s + n].right) * 0.5f;
+                    const float win = 0.5f * (1.0f - std::cos((2.0f * std::numbers::pi_v<float> * n) / N_FFT));
+                    real += mono * win * std::cos(omega * n);
+                    imag -= mono * win * std::sin(omega * n);
+                }
+
+                const float mag = std::sqrt(real * real + imag * imag);
+                if (mag > 0.06f) {
+                    canvas.set_pixel(px, py, true);
+                }
+            }
+        }
+
+        std::string border;
+        border.reserve(char_w * 3);
+        for (int i = 0; i < char_w; ++i) border += "\xe2\x94\x80";
+
+        std::cout << "  0 Hz" << std::string(char_w > 14 ? char_w - 14 : 2, ' ') << "4000 Hz\n";
+        std::cout << "  \xe2\x94\x8c" << border << "\xe2\x94\x90\n";
+        std::cout << canvas.render_ansi("\033[1;33m");
+        std::cout << "  \xe2\x94\x94" << border << "\xe2\x94\x98\n";
+        std::cout << "  t = 0 s" << std::string(char_w > 18 ? char_w - 18 : 2, ' ') << "t = "
+                  << std::fixed << std::setprecision(1) << (static_cast<float>(frames.size()) / sample_rate) << " s\n\n";
+    }
 };
 
 } // namespace aether::ui

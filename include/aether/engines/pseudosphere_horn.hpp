@@ -1,0 +1,166 @@
+#pragma once
+
+#include "../types.hpp"
+#include <vector>
+#include <cmath>
+#include <algorithm>
+#include <numbers>
+
+namespace aether::engines {
+
+/**
+ * @brief Beltrami Pseudosphere Tractrix Horn Acoustic Physical Modeling Synthesizer.
+ *
+ * Models acoustic wave propagation inside an axisymmetric horn surface of constant
+ * negative Gaussian curvature K = -1 (Beltrami Pseudosphere / Tractrix manifold).
+ *
+ * Solves the Webster Horn Wave Equation:
+ *   d^2 p / dz^2 + (S'(z)/S(z)) * (dp/dz) = (1/c^2) * (d^2 p / dt^2)
+ * where the cross-sectional area profile S(z) = pi * r(z)^2 follows the tractrix flare:
+ *   r(z) = r_bell * sech(z / a)
+ * Cutoff frequency: f_c = c / (2 * pi * a)
+ */
+class PseudosphereHorn {
+public:
+    static constexpr size_t NUM_CELLS = 48;
+
+    struct Config {
+        float horn_length_m{0.65f};     // Horn physical length (meters)
+        float throat_radius_m{0.008f};  // Throat radius (entrance)
+        float bell_radius_m{0.12f};     // Bell radius (mouth)
+        float curvature_a{0.22f};       // Characteristic pseudosphere curvature radius
+        float damping{0.0006f};         // Visco-thermal tube wall loss
+        float speed_of_sound{343.0f};   // m/s
+    };
+
+    explicit PseudosphereHorn(uint32_t sample_rate = 48000, Config cfg = Config{})
+        : sample_rate_(sample_rate), dt_(1.0f / sample_rate), config_(cfg) {
+        init_geometry();
+    }
+
+    void init_geometry() {
+        dz_ = config_.horn_length_m / (NUM_CELLS - 1);
+        c_ = config_.speed_of_sound;
+        courant_ = (c_ * dt_) / dz_;
+
+        area_.resize(NUM_CELLS);
+        p_current_.assign(NUM_CELLS, 0.0f);
+        p_previous_.assign(NUM_CELLS, 0.0f);
+        p_next_.assign(NUM_CELLS, 0.0f);
+
+        // Compute Tractrix pseudosphere flare cross-sectional area: S(z) = pi * r(z)^2
+        for (size_t i = 0; i < NUM_CELLS; ++i) {
+            const float z = i * dz_;
+            // Normalized position along the tractrix
+            const float u = (config_.horn_length_m - z) / config_.curvature_a;
+            // r(z) blends from throat to bell following sech(u)
+            const float sech_u = 1.0f / std::cosh(std::clamp(u, 0.0f, 6.0f));
+            const float r = config_.throat_radius_m + (config_.bell_radius_m - config_.throat_radius_m) * sech_u;
+            area_[i] = std::numbers::pi_v<float> * r * r;
+        }
+
+        // Lowpass radiation filter state at open bell
+        bell_radiation_state_ = 0.0f;
+    }
+
+    /**
+     * @brief Excite the throat of the pseudosphere horn with acoustic pressure.
+     */
+    void excite_throat(float pressure_pulse) {
+        p_current_[0] += pressure_pulse;
+        p_previous_[0] += pressure_pulse * 0.5f;
+    }
+
+    /**
+     * @brief Continuous non-linear lip-reed excitation at the horn throat.
+     */
+    void blow(float lip_pressure, float lip_frequency, float dt) {
+        lip_phase_ += lip_frequency * dt * 2.0f * std::numbers::pi_v<float>;
+        if (lip_phase_ >= 2.0f * std::numbers::pi_v<float>) {
+            lip_phase_ -= 2.0f * std::numbers::pi_v<float>;
+        }
+
+        // Non-linear Bernoulli lip-aperture opening model
+        const float back_pressure = p_current_[0];
+        const float delta_p = lip_pressure - back_pressure;
+        const float opening = std::max(0.0f, std::sin(lip_phase_) + 0.3f * delta_p);
+        const float flow = 0.6f * opening * std::sqrt(std::abs(delta_p)) * (delta_p >= 0.0f ? 1.0f : -1.0f);
+
+        p_current_[0] += flow * 12.0f;
+    }
+
+    /**
+     * @brief Step the acoustic finite-difference Webster wave solver by one sample.
+     */
+    StereoFrame step() noexcept {
+        const float r2 = courant_ * courant_;
+        const float gamma = 1.0f - config_.damping;
+
+        // Interior Webster horn finite-difference update:
+        // p^{n+1}_i = 2*p^n_i - p^{n-1}_i + (c*dt/dz)^2 * [ (S_{i+1/2}*(p_{i+1}-p_i) - S_{i-1/2}*(p_i-p_{i-1})) / S_i ]
+        for (size_t i = 1; i < NUM_CELLS - 1; ++i) {
+            const float s_mid_plus  = 0.5f * (area_[i] + area_[i + 1]);
+            const float s_mid_minus = 0.5f * (area_[i] + area_[i - 1]);
+
+            const float spatial_deriv = (s_mid_plus * (p_current_[i + 1] - p_current_[i]) -
+                                         s_mid_minus * (p_current_[i] - p_current_[i - 1])) / area_[i];
+
+            p_next_[i] = (2.0f * p_current_[i] - p_previous_[i] * gamma + r2 * spatial_deriv) * gamma;
+        }
+
+        // Throat boundary condition (i = 0): closed / semi-reflective with driver input
+        p_next_[0] = p_current_[1] * 0.98f;
+
+        // Mouth / bell radiation boundary condition (i = NUM_CELLS - 1):
+        // Tractrix bell radiates high frequencies and reflects low frequencies below cutoff f_c
+        const float p_bell = p_current_[NUM_CELLS - 2];
+        const float radiation_cutoff = 0.25f; // Bell transmission factor
+        bell_radiation_state_ = bell_radiation_state_ * (1.0f - radiation_cutoff) + p_bell * radiation_cutoff;
+        p_next_[NUM_CELLS - 1] = - (p_bell - bell_radiation_state_) * 0.85f; // Phase inversion on reflection
+
+        // Cycle FDTD time buffers
+        std::copy(p_current_.begin(), p_current_.end(), p_previous_.begin());
+        std::copy(p_next_.begin(), p_next_.end(), p_current_.begin());
+
+        // Radiated acoustic wave at the bell (time derivative of mouth volume velocity)
+        const float radiated_pressure = (p_current_[NUM_CELLS - 1] - p_previous_[NUM_CELLS - 1]) * 4.0f;
+
+        // Stereo spatialization: Bell mouth pickup + Throat resonance
+        const float out_l = radiated_pressure * 0.85f + p_current_[0] * 0.15f;
+        const float out_r = radiated_pressure * 0.70f + p_current_[NUM_CELLS / 2] * 0.30f;
+
+        return StereoFrame{
+            std::tanh(out_l * 0.4f),
+            std::tanh(out_r * 0.4f)
+        };
+    }
+
+    void reset() noexcept {
+        std::fill(p_current_.begin(), p_current_.end(), 0.0f);
+        std::fill(p_previous_.begin(), p_previous_.end(), 0.0f);
+        std::fill(p_next_.begin(), p_next_.end(), 0.0f);
+        bell_radiation_state_ = 0.0f;
+        lip_phase_ = 0.0f;
+    }
+
+    [[nodiscard]] float bell_cutoff_frequency() const noexcept {
+        return config_.speed_of_sound / (2.0f * std::numbers::pi_v<float> * config_.curvature_a);
+    }
+
+private:
+    uint32_t sample_rate_{48000};
+    float dt_{1.0f / 48000.0f};
+    Config config_;
+    float dz_{0.01f};
+    float c_{343.0f};
+    float courant_{0.5f};
+    float bell_radiation_state_{0.0f};
+    float lip_phase_{0.0f};
+
+    std::vector<float> area_;
+    std::vector<float> p_current_;
+    std::vector<float> p_previous_;
+    std::vector<float> p_next_;
+};
+
+} // namespace aether::engines
