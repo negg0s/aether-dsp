@@ -53,7 +53,7 @@ Unlike standard physical modeling synthesizers constrained to 1D strings (Karplu
 - **AVX2 SIMD Vectorized FDTD Kernel:**
   Processes 8 spatial grid cells per instruction using 8-wide vectorized fused multiply-add (`_mm256_fmadd_ps`) operations.
 - **Beltrami Pseudosphere Tractrix Horn Resonator:**
-  Acoustic wave propagation inside an axisymmetric surface of constant negative Gaussian curvature $K = -1$. Solves the Webster Horn Equation with tractrix cross-sectional area $S(z) = \pi r^2 \operatorname{sech}^2(u)$, modeling brass acoustic flares and cutoff transmission frequencies without mouth reflections.
+  Acoustic wave propagation inside an axisymmetric surface of constant negative Gaussian curvature $K = -1$. Solves the Webster Horn Equation with tractrix cross-sectional area $S(z) = \pi r^2 \mathrm{sech}^2(u)$, modeling brass acoustic flares and cutoff transmission frequencies without mouth reflections.
 - **4th-Order Symplectic Yoshida Integrator:**
   Phase-space preserving geometric numerical integrator ($O(\Delta t^4)$ global accuracy) with Yoshida sub-step constants ($w_1 = \frac{1}{2 - 2^{1/3}}$), ensuring exact conservation of the shadow Hamiltonian and zero energy drift over millions of samples.
 - **Hénon-Heiles Galactic Gravitational Chaos Oscillator:**
@@ -110,7 +110,7 @@ $$\frac{\partial^2 u}{\partial t^2} = c^2 \Delta_H u - \gamma \frac{\partial u}{
 
 Because the distance to the boundary $r \to 1$ diverges asymptotically according to the geodesic distance:
 
-$$d_H(z_1, z_2) = \operatorname{arcosh}\left( 1 + \frac{2|z_1 - z_2|^2}{(1 - |z_1|^2)(1 - |z_2|^2)} \right)$$
+$$d_H(z_1, z_2) = \mathrm{arcosh}\left( 1 + \frac{2|z_1 - z_2|^2}{(1 - |z_1|^2)(1 - |z_2|^2)} \right)$$
 
 Acoustic reflections disperse into fractal horocyclic wavefronts, completely eliminating harmonic room resonances.
 
