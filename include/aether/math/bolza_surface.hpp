@@ -75,7 +75,7 @@ public:
     /**
      * @brief Apply Fuchsian side-pairing Möbius isometry when crossing side k.
      * Maps edge k to opposite edge (k + 4) mod 8, wrapping the acoustic wavefront
-     * seamlessly across the compact genus-2 manifold without boundaries.
+     * across the compact genus-2 manifold without boundaries.
      */
     [[nodiscard]] static Vec2 wrap_point(Vec2 p, size_t side_k) noexcept {
         constexpr float PI = std::numbers::pi_v<float>;

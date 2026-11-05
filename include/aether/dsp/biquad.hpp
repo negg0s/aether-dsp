@@ -17,7 +17,7 @@ enum class FilterType {
 
 /**
  * @brief Direct Form II Transposed Biquad Filter.
- * Canonical zero-latency, numerically robust filter with parameter smoothing.
+ * Direct Form II Transposed implementation with parameter smoothing.
  */
 class BiquadFilter {
 public:
