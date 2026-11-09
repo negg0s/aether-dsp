@@ -39,7 +39,10 @@ public:
         float jawari_stiffness{45000.0f};// Penalty spring constant of bridge contact
     };
 
-    explicit HyperbolicString(uint32_t sample_rate = 48000, Config cfg = Config{})
+    explicit HyperbolicString(uint32_t sample_rate = 48000)
+        : HyperbolicString(sample_rate, Config{}) {}
+
+    HyperbolicString(uint32_t sample_rate, Config cfg)
         : sample_rate_(sample_rate), dt_(1.0f / sample_rate), config_(cfg) {
         init_grid();
     }

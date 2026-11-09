@@ -53,7 +53,8 @@ public:
         float speed_of_sound{343.0f}; // m/s equivalent scale
     };
 
-    explicit GeodesicRayTracer(Config cfg = Config{}) : config_(cfg) {}
+    GeodesicRayTracer() : GeodesicRayTracer(Config{}) {}
+    explicit GeodesicRayTracer(Config cfg) : config_(cfg) {}
 
     /**
      * @brief Compute Geodesic Equations state derivative (velocity & acceleration).

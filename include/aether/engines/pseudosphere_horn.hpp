@@ -33,7 +33,10 @@ public:
         float speed_of_sound{343.0f};   // m/s
     };
 
-    explicit PseudosphereHorn(uint32_t sample_rate = 48000, Config cfg = Config{})
+    explicit PseudosphereHorn(uint32_t sample_rate = 48000)
+        : PseudosphereHorn(sample_rate, Config{}) {}
+
+    PseudosphereHorn(uint32_t sample_rate, Config cfg)
         : sample_rate_(sample_rate), dt_(1.0f / sample_rate), config_(cfg) {
         init_geometry();
     }
