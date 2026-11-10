@@ -95,6 +95,10 @@ class AetherEngine:
         self.lib.aether_engine_note_off(self.handle)
 
     def render(self, duration_sec: float = 2.0, block_size: int = 64) -> List[Tuple[float, float]]:
+        if duration_sec <= 0:
+            return []
+        if block_size <= 0:
+            raise ValueError("block_size must be greater than 0")
         total_frames = int(duration_sec * self.sample_rate)
         buffer = (ctypes.c_float * (block_size * 2))()
         frames = []

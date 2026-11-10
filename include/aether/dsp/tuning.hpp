@@ -84,49 +84,59 @@ public:
         if (!file.is_open()) return false;
 
         std::string line;
+        std::string new_description;
+        bool has_description = false;
         int note_count = -1;
         std::vector<double> new_ratios;
         new_ratios.push_back(1.0);
 
-        while (std::getline(file, line)) {
-            // Trim whitespace
-            line.erase(0, line.find_first_not_of(" \t\r\n"));
-            if (line.empty() || line[0] == '!') continue; // Comment
+        try {
+            while (std::getline(file, line)) {
+                // Trim whitespace
+                line.erase(0, line.find_first_not_of(" \t\r\n"));
+                if (line.empty() || line[0] == '!') continue; // Comment
 
-            if (description_.empty()) {
-                description_ = line;
-                continue;
-            }
+                if (!has_description) {
+                    new_description = line;
+                    has_description = true;
+                    continue;
+                }
 
-            if (note_count < 0) {
-                note_count = std::stoi(line);
-                continue;
-            }
+                if (note_count < 0) {
+                    note_count = std::stoi(line);
+                    if (note_count <= 0 || note_count > 1024) return false;
+                    continue;
+                }
 
-            // Parse cents or ratio (e.g., "1200.0" or "3/2")
-            if (line.find('.') != std::string::npos) {
-                // Cents
-                double cents = std::stod(line);
-                new_ratios.push_back(std::pow(2.0, cents / 1200.0));
-            } else if (line.find('/') != std::string::npos) {
-                // Fraction ratio
-                std::stringstream ss(line);
-                double num = 1.0, den = 1.0;
-                char slash;
-                ss >> num >> slash >> den;
-                new_ratios.push_back(num / den);
-            } else {
-                // Integer ratio
-                double val = std::stod(line);
-                new_ratios.push_back(val);
-            }
+                // Parse cents or ratio (e.g., "1200.0" or "3/2")
+                if (line.find('.') != std::string::npos) {
+                    // Cents
+                    double cents = std::stod(line);
+                    new_ratios.push_back(std::pow(2.0, cents / 1200.0));
+                } else if (line.find('/') != std::string::npos) {
+                    // Fraction ratio
+                    std::stringstream ss(line);
+                    double num = 1.0, den = 1.0;
+                    char slash = '/';
+                    ss >> num >> slash >> den;
+                    if (den == 0.0) return false;
+                    new_ratios.push_back(num / den);
+                } else {
+                    // Integer ratio
+                    double val = std::stod(line);
+                    new_ratios.push_back(val);
+                }
 
-            if (static_cast<int>(new_ratios.size()) - 1 == note_count) {
-                break;
+                if (static_cast<int>(new_ratios.size()) - 1 == note_count) {
+                    break;
+                }
             }
+        } catch (...) {
+            return false;
         }
 
-        if (new_ratios.size() > 1) {
+        if (new_ratios.size() > 1 && static_cast<int>(new_ratios.size()) - 1 == note_count) {
+            description_ = std::move(new_description);
             period_ratio_ = new_ratios.back();
             new_ratios.pop_back(); // Remove repeat period
             ratios_ = std::move(new_ratios);
@@ -153,6 +163,12 @@ public:
 
         const double ratio = ratios_[index] * std::pow(period_ratio_, octave);
         return static_cast<float>(root_freq * ratio);
+    }
+
+    void load_scale(double period, std::vector<double> ratios, std::string description = "") {
+        period_ratio_ = period > 0.0 ? period : 2.0;
+        ratios_ = std::move(ratios);
+        description_ = std::move(description);
     }
 
     [[nodiscard]] size_t size() const noexcept {

@@ -3,6 +3,8 @@
 #include "../types.hpp"
 #include "../engine.hpp"
 #include <vector>
+#include <array>
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 
@@ -86,6 +88,10 @@ public:
             });
         }
 
+        std::stable_sort(score.begin(), score.end(), [](const NoteEvent& a, const NoteEvent& b) {
+            return a.timestamp_sec < b.timestamp_sec;
+        });
+
         return score;
     }
 
@@ -95,22 +101,28 @@ public:
     static std::vector<StereoFrame> render_score(const std::vector<NoteEvent>& events,
                                                  double duration_sec,
                                                  uint32_t sample_rate = DEFAULT_SAMPLE_RATE) {
+        if (duration_sec <= 0.0) return {};
         const size_t total_samples = static_cast<size_t>(duration_sec * sample_rate);
         std::vector<StereoFrame> output(total_samples, StereoFrame{0.0f, 0.0f});
 
+        std::vector<NoteEvent> sorted_events = events;
+        std::stable_sort(sorted_events.begin(), sorted_events.end(), [](const NoteEvent& a, const NoteEvent& b) {
+            return a.timestamp_sec < b.timestamp_sec;
+        });
+
         Engine engine(sample_rate);
         constexpr size_t BLOCK_SIZE = 64;
-        std::vector<StereoFrame> block(BLOCK_SIZE);
+        std::array<StereoFrame, BLOCK_SIZE> block{};
 
         size_t event_idx = 0;
-        const size_t total_events = events.size();
+        const size_t total_events = sorted_events.size();
 
         for (size_t sample_pos = 0; sample_pos < total_samples; sample_pos += BLOCK_SIZE) {
             const double current_sec = static_cast<double>(sample_pos) / sample_rate;
 
             // Trigger events scheduled in this block
-            while (event_idx < total_events && events[event_idx].timestamp_sec <= current_sec) {
-                const auto& ev = events[event_idx];
+            while (event_idx < total_events && sorted_events[event_idx].timestamp_sec <= current_sec) {
+                const auto& ev = sorted_events[event_idx];
                 engine.load_preset(ev.preset);
                 if (ev.preset == Preset::ChladniPlateGong) {
                     engine.chladni().configure(ev.fundamental_freq, 1.1f, static_cast<float>(sample_rate));

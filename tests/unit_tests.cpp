@@ -30,6 +30,7 @@
 #include "aether/engines/hyperbolic_string.hpp"
 #include "aether/dsp/fx/hyperbolic_spatializer_3d.hpp"
 #include "aether/math/fft.hpp"
+#include "aether/math/algorithmic_composer.hpp"
 #include "aether/math/bolza_surface.hpp"
 #include "aether/dsp/fx/partitioned_convolution.hpp"
 #include "aether/engine.hpp"
@@ -874,8 +875,216 @@ void test_kdv_soliton_lattice() {
     std::cout << "PASSED\n";
 }
 
+void test_midi_parser_robustness() {
+    std::cout << "[TEST] MIDI Parser Boundary & Truncation Robustness... ";
+    const std::string tmp_bad_midi = "test_truncated.mid";
+    {
+        std::ofstream out(tmp_bad_midi, std::ios::binary);
+        out.write("MThd", 4);
+        uint8_t h[10] = {0, 0, 0, 6, 0, 1, 0, 1, 1, 0xE0};
+        out.write(reinterpret_cast<const char*>(h), 10);
+        out.write("MTrk", 4);
+        uint8_t trk[6] = {0, 0, 0, 2, 0x00, 0xFF}; // Truncated meta event
+        out.write(reinterpret_cast<const char*>(trk), 6);
+    }
+
+    aether::midi::MidiFile mf;
+    mf.load(tmp_bad_midi);
+    std::remove(tmp_bad_midi.c_str());
+    std::cout << "PASSED\n";
+}
+
+void test_wav_reader_robustness() {
+    std::cout << "[TEST] WAV Parser Division-by-Zero & Chunk Validation... ";
+    const std::string tmp_bad_wav = "test_bad.wav";
+    {
+        std::ofstream out(tmp_bad_wav, std::ios::binary);
+        out.write("RIFF", 4);
+        uint32_t size = 44;
+        out.write(reinterpret_cast<const char*>(&size), 4);
+        out.write("WAVE", 4);
+        out.write("fmt ", 4);
+        uint32_t sub1 = 16;
+        uint16_t fmt = 1;
+        uint16_t chans = 0; // Invalid 0 channels
+        uint32_t sr = 44100;
+        uint32_t br = 0;
+        uint16_t ba = 0;
+        uint16_t bits = 0; // Invalid 0 bits per sample
+        out.write(reinterpret_cast<const char*>(&sub1), 4);
+        out.write(reinterpret_cast<const char*>(&fmt), 2);
+        out.write(reinterpret_cast<const char*>(&chans), 2);
+        out.write(reinterpret_cast<const char*>(&sr), 4);
+        out.write(reinterpret_cast<const char*>(&br), 4);
+        out.write(reinterpret_cast<const char*>(&ba), 2);
+        out.write(reinterpret_cast<const char*>(&bits), 2);
+        out.write("data", 4);
+        uint32_t data_sz = 100;
+        out.write(reinterpret_cast<const char*>(&data_sz), 4);
+    }
+
+    auto res = aether::WavReader::read_wav(tmp_bad_wav);
+    assert(!res.valid); // Must reject cleanly without crash/SIGFPE
+    std::remove(tmp_bad_wav.c_str());
+    std::cout << "PASSED\n";
+}
+
+void test_hyperbolic_string_high_pitches() {
+    std::cout << "[TEST] Hyperbolic String CFL Stability at 440 Hz & 1200 Hz... ";
+    aether::engines::HyperbolicString string(48000);
+
+    // Test 440 Hz (standard concert pitch)
+    string.set_pitch(440.0f);
+    string.pluck(0.22f, 0.9f);
+    for (int i = 0; i < 2000; ++i) {
+        auto f = string.step();
+        assert(!std::isnan(f.left) && !std::isnan(f.right));
+        assert(!std::isinf(f.left) && !std::isinf(f.right));
+        assert(std::abs(f.left) <= 1.0f && std::abs(f.right) <= 1.0f);
+    }
+
+    // Test maximum pitch 1200 Hz
+    string.reset();
+    string.set_pitch(1200.0f);
+    string.pluck(0.22f, 0.9f);
+    for (int i = 0; i < 2000; ++i) {
+        auto f = string.step();
+        assert(!std::isnan(f.left) && !std::isnan(f.right));
+        assert(!std::isinf(f.left) && !std::isinf(f.right));
+        assert(std::abs(f.left) <= 1.0f && std::abs(f.right) <= 1.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_monophonic_note_off_decay() {
+    std::cout << "[TEST] Monophonic note_off() Envelope Sound Release... ";
+    aether::Engine engine(48000);
+    engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+    engine.reverb().configure(0.0f, 0.0f, 0.0f); // zero reverb to isolate synth envelope release
+    engine.envelope().configure(0.001f, 0.05f, 0.8f, 0.02f, 48000.0f);
+    engine.note_on({0.3f, 0.4f}, 0.9f);
+
+    std::vector<aether::StereoFrame> block(256);
+    engine.process_block(block);
+    float energy_active = 0.0f;
+    for (const auto& f : block) energy_active += std::abs(f.left) + std::abs(f.right);
+    assert(energy_active > 0.001f);
+
+    engine.note_off();
+    // Render to allow release stage to complete (0.02s release = 960 samples ~ 4 blocks)
+    for (int i = 0; i < 50; ++i) {
+        engine.process_block(block);
+    }
+
+    float energy_released = 0.0f;
+    for (const auto& f : block) energy_released += std::abs(f.left) + std::abs(f.right);
+    assert(energy_released < 1e-4f);
+    std::cout << "PASSED\n";
+}
+
+void test_composer_sorted_events() {
+    std::cout << "[TEST] Algorithmic Composer Monotonic Timestamp Sorting... ";
+    using aether::math::AlgorithmicComposer;
+    auto score = AlgorithmicComposer::generate_fibonacci_score(10.0);
+    assert(!score.empty());
+    for (size_t i = 1; i < score.size(); ++i) {
+        assert(score[i].timestamp_sec >= score[i - 1].timestamp_sec);
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_partitioned_convolution_zero_latency() {
+    std::cout << "[TEST] Partitioned Convolution Zero-Latency Response... ";
+    using aether::dsp::fx::PartitionedConvolution;
+    PartitionedConvolution conv;
+
+    // Delta impulse at t=0
+    std::vector<float> ir(256, 0.0f);
+    ir[0] = 1.0f;
+    conv.load_impulse_response(ir, 1.0f);
+
+    // Feed a single impulse at sample 0
+    auto out0 = conv.process(aether::StereoFrame{1.0f, 1.0f});
+    // With true zero-latency head FIR, output at sample 0 must be non-zero immediately
+    assert(std::abs(out0.left) > 0.1f);
+    assert(std::abs(out0.right) > 0.1f);
+    std::cout << "PASSED\n";
+}
+
+void test_scala_multiple_reloads() {
+    std::cout << "[TEST] Scala File Multiple Consecutive Reloads... ";
+    aether::dsp::TuningSystem tuning;
+
+    const std::string scl1 = "temp1.scl";
+    const std::string scl2 = "temp2.scl";
+    {
+        std::ofstream f1(scl1);
+        f1 << "! scale 1\nScale One\n 2\n!\n 100.0\n 2/1\n";
+        std::ofstream f2(scl2);
+        f2 << "! scale 2\nScale Two with longer description\n 3\n!\n 200.0\n 400.0\n 2/1\n";
+    }
+
+    bool ok1 = tuning.load_scala_file(scl1);
+    assert(ok1);
+    bool ok2 = tuning.load_scala_file(scl2);
+    assert(ok2); // Must succeed without exception
+
+    std::remove(scl1.c_str());
+    std::remove(scl2.c_str());
+    std::cout << "PASSED\n";
+}
+
+void test_fft_window_size_one() {
+    std::cout << "[TEST] FFT Window Size 1 and 0 Stability... ";
+    std::vector<float> single = {1.5f};
+    aether::math::FFT::apply_window(single, aether::math::WindowType::Hann);
+    assert(!std::isnan(single[0]));
+    assert(single[0] == 1.5f);
+
+    std::vector<float> empty;
+    aether::math::FFT::apply_window(empty, aether::math::WindowType::BlackmanHarris);
+    std::cout << "PASSED\n";
+}
+
+void test_binaural_panner_rear_symmetry() {
+    std::cout << "[TEST] Binaural Panner Rear 180-deg Symmetry... ";
+    aether::dsp::fx::BinauralPanner panner(48000);
+    panner.set_position(180.0f, 1.0f);
+    panner.reset();
+    auto s1 = panner.process(1.0f);
+
+    panner.set_position(-180.0f, 1.0f);
+    panner.reset();
+    auto s2 = panner.process(1.0f);
+
+    assert(std::abs(s1.left - s1.right) < 1e-4f);
+    assert(std::abs(s2.left - s2.right) < 1e-4f);
+    std::cout << "PASSED\n";
+}
+
+void test_topological_metamaterial_strike() {
+    std::cout << "[TEST] Topological Metamaterial Excitation at x=1... ";
+    aether::engines::TopologicalMetamaterial topo(48000);
+    topo.strike_edge(0.9f);
+    auto s = topo.process();
+    assert(!std::isnan(s.left) && !std::isnan(s.right));
+    std::cout << "PASSED\n";
+}
+
+void test_pseudosphere_horn_low_sample_rate() {
+    std::cout << "[TEST] Pseudosphere Horn Stability at 16000 Hz... ";
+    aether::engines::PseudosphereHorn horn(16000);
+    horn.excite_throat(0.8f);
+    for (int i = 0; i < 500; ++i) {
+        auto s = horn.step();
+        assert(!std::isnan(s.left) && !std::isnan(s.right));
+        assert(!std::isinf(s.left) && !std::isinf(s.right));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (38 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (49 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -914,6 +1123,17 @@ int main() {
     test_topological_metamaterial();
     test_kdv_soliton_lattice();
     test_engine_presets();
-    std::cout << "\033[1;32mALL 38 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_midi_parser_robustness();
+    test_wav_reader_robustness();
+    test_hyperbolic_string_high_pitches();
+    test_monophonic_note_off_decay();
+    test_composer_sorted_events();
+    test_partitioned_convolution_zero_latency();
+    test_scala_multiple_reloads();
+    test_fft_window_size_one();
+    test_binaural_panner_rear_symmetry();
+    test_topological_metamaterial_strike();
+    test_pseudosphere_horn_low_sample_rate();
+    std::cout << "\033[1;32mALL 49 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

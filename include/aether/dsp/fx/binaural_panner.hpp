@@ -50,24 +50,31 @@ public:
         // Distance attenuation: 1 / (1 + d^2)
         dist_gain_ = 1.0f / (1.0f + 0.5f * distance_m * distance_m);
 
-        // Woodworth's spherical head ITD model
-        const float sin_t = std::sin(std::abs(theta_rad));
-        const float abs_t = std::abs(theta_rad);
-        const float max_itd_sec = (HEAD_RADIUS_M / SPEED_OF_SOUND_MPS) * (abs_t + sin_t);
+        // Woodworth's spherical head ITD model:
+        // Project incidence angle from median sagittal plane into [0, pi/2]
+        // ensuring physical acoustic symmetry between front (0 deg) and rear (180 deg)
+        const float pi = static_cast<float>(constants::PI);
+        float abs_t = std::fmod(std::abs(theta_rad), 2.0f * pi);
+        if (abs_t > pi) abs_t = 2.0f * pi - abs_t;
+        const float theta_inc = (abs_t > 0.5f * pi) ? (pi - abs_t) : abs_t;
+
+        const float sin_t = std::sin(theta_inc);
+        const float max_itd_sec = (HEAD_RADIUS_M / SPEED_OF_SOUND_MPS) * (theta_inc + sin_t);
         const float delay_samples = max_itd_sec * sample_rate_;
 
-        if (theta_rad >= 0.0f) {
+        const float sin_full = std::sin(theta_rad);
+        if (sin_full >= 0.0f) {
             // Sound is on the RIGHT: Right ear leading, Left ear delayed and shadowed
             delay_samples_l_ = std::clamp(delay_samples, 0.0f, static_cast<float>(MAX_DELAY_SAMPLES - 2));
             delay_samples_r_ = 0.0f;
-            shadow_amount_l_ = std::abs(std::sin(theta_rad)) * 0.75f;
+            shadow_amount_l_ = sin_t * 0.75f;
             shadow_amount_r_ = 0.0f;
         } else {
             // Sound is on the LEFT: Left ear leading, Right ear delayed and shadowed
             delay_samples_l_ = 0.0f;
             delay_samples_r_ = std::clamp(delay_samples, 0.0f, static_cast<float>(MAX_DELAY_SAMPLES - 2));
             shadow_amount_l_ = 0.0f;
-            shadow_amount_r_ = std::abs(std::sin(theta_rad)) * 0.75f;
+            shadow_amount_r_ = sin_t * 0.75f;
         }
     }
 

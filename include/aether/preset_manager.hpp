@@ -68,16 +68,21 @@ public:
             val.erase(0, val.find_first_not_of(" \t"));
             val.erase(val.find_last_not_of(" \t\r\n") + 1);
 
-            if (key == "name") data.name = val;
-            else if (key == "preset_id") data.preset_id = std::stoi(val);
-            else if (key == "wave_speed") data.wave_speed = std::stof(val);
-            else if (key == "damping") data.damping = std::stof(val);
-            else if (key == "curvature_scale") data.curvature_scale = std::stof(val);
-            else if (key == "plate_fundamental") data.plate_fundamental = std::stof(val);
-            else if (key == "plate_stiffness") data.plate_stiffness = std::stof(val);
-            else if (key == "reverb_decay") data.reverb_decay = std::stof(val);
-            else if (key == "reverb_mix") data.reverb_mix = std::stof(val);
-            else if (key == "tuning_scale") data.tuning_scale = val;
+            try {
+                if (key == "name") data.name = val;
+                else if (key == "preset_id") data.preset_id = std::stoi(val);
+                else if (key == "wave_speed") data.wave_speed = std::stof(val);
+                else if (key == "damping") data.damping = std::stof(val);
+                else if (key == "curvature_scale") data.curvature_scale = std::stof(val);
+                else if (key == "plate_fundamental") data.plate_fundamental = std::stof(val);
+                else if (key == "plate_stiffness") data.plate_stiffness = std::stof(val);
+                else if (key == "reverb_decay") data.reverb_decay = std::stof(val);
+                else if (key == "reverb_mix") data.reverb_mix = std::stof(val);
+                else if (key == "tuning_scale") data.tuning_scale = val;
+            } catch (...) {
+                // Ignore malformed key-value line safely
+                continue;
+            }
         }
 
         return true;

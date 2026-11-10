@@ -21,6 +21,7 @@ pub enum Preset {
     KdvSolitonLattice = 13,
 }
 
+#[link(name = "aether-dsp")]
 extern "C" {
     fn aether_engine_create(sample_rate: u32) -> *mut c_void;
     fn aether_engine_destroy(handle: *mut c_void);

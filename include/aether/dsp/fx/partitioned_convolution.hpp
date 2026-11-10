@@ -4,6 +4,7 @@
 #include "../biquad.hpp"
 #include "../../math/fft.hpp"
 #include <vector>
+#include <array>
 #include <complex>
 #include <span>
 #include <algorithm>
@@ -37,22 +38,43 @@ public:
         wet_gain_ = wet_gain;
         if (ir.empty()) {
             num_partitions_ = 0;
+            num_tail_partitions_ = 0;
             return;
         }
 
         num_partitions_ = (ir.size() + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        freq_partitions_.assign(num_partitions_ * FFT_SIZE, Complex(0.0f, 0.0f));
-        input_history_.assign(num_partitions_ * FFT_SIZE, Complex(0.0f, 0.0f));
-        time_input_buffer_.assign(FFT_SIZE, 0.0f);
-        output_fifo_.assign(BLOCK_SIZE, 0.0f);
+        num_tail_partitions_ = num_partitions_ > 1 ? num_partitions_ - 1 : 0;
+
+        // 1. Direct Time-Domain FIR Head Partition (Partition 0) for True Zero-Latency
+        head_ir_.fill(0.0f);
+        head_history_.fill(0.0f);
+        head_cursor_ = 0;
+        const size_t head_count = std::min(BLOCK_SIZE, ir.size());
+        for (size_t i = 0; i < head_count; ++i) {
+            head_ir_[i] = ir[i];
+        }
+
+        // 2. Frequency-Domain Partitions for Tail (Partitions 1 .. P-1)
+        if (num_tail_partitions_ > 0) {
+            freq_partitions_.assign(num_tail_partitions_ * FFT_SIZE, Complex(0.0f, 0.0f));
+            input_history_.assign(num_tail_partitions_ * FFT_SIZE, Complex(0.0f, 0.0f));
+        } else {
+            freq_partitions_.clear();
+            input_history_.clear();
+        }
+
+        time_input_buffer_.fill(0.0f);
+        current_input_block_.fill(0.0f);
+        tail_output_fifo_.fill(0.0f);
+        history_head_ = 0;
         fifo_read_idx_ = BLOCK_SIZE; // Triggers immediate block process on first sample
 
-        std::vector<Complex> fft_buf(FFT_SIZE);
+        std::array<Complex, FFT_SIZE> fft_buf{};
 
-        for (size_t p = 0; p < num_partitions_; ++p) {
-            std::fill(fft_buf.begin(), fft_buf.end(), Complex(0.0f, 0.0f));
-            const size_t start_idx = p * BLOCK_SIZE;
-            const size_t count = std::min(BLOCK_SIZE, ir.size() - start_idx);
+        for (size_t p = 0; p < num_tail_partitions_; ++p) {
+            fft_buf.fill(Complex(0.0f, 0.0f));
+            const size_t start_idx = (p + 1) * BLOCK_SIZE;
+            const size_t count = (start_idx < ir.size()) ? std::min(BLOCK_SIZE, ir.size() - start_idx) : 0;
 
             for (size_t i = 0; i < count; ++i) {
                 fft_buf[i] = Complex(ir[start_idx + i], 0.0f);
@@ -80,21 +102,34 @@ public:
     }
 
     /**
-     * @brief Process a single input sample through the partitioned convolution reverb.
+     * @brief Process a single input sample through the zero-latency partitioned convolution reverb.
      */
     [[nodiscard]] StereoFrame process(StereoFrame input) noexcept {
         if (num_partitions_ == 0) return input;
 
         const float mono_in = (input.left + input.right) * 0.5f;
 
-        // Check if FIFO needs a new processed block
-        if (fifo_read_idx_ >= BLOCK_SIZE) {
-            process_new_block();
-            fifo_read_idx_ = 0;
+        // Direct Time-Domain FIR for head partition 0 (Exact Zero Latency)
+        head_history_[head_cursor_] = mono_in;
+        float fir_head_out = 0.0f;
+        for (size_t i = 0; i < BLOCK_SIZE; ++i) {
+            const size_t idx = (head_cursor_ + BLOCK_SIZE - i) % BLOCK_SIZE;
+            fir_head_out += head_ir_[i] * head_history_[idx];
+        }
+        head_cursor_ = (head_cursor_ + 1) % BLOCK_SIZE;
+
+        // Overlap-save tail convolution for partitions 1 .. P-1
+        float tail_out = 0.0f;
+        if (num_tail_partitions_ > 0) {
+            if (fifo_read_idx_ >= BLOCK_SIZE) {
+                process_new_block();
+                fifo_read_idx_ = 0;
+            }
+            current_input_block_[fifo_read_idx_] = mono_in;
+            tail_out = tail_output_fifo_[fifo_read_idx_++];
         }
 
-        current_input_block_[fifo_read_idx_] = mono_in;
-        const float wet_out = output_fifo_[fifo_read_idx_++] * wet_gain_;
+        const float wet_out = (fir_head_out + tail_out) * wet_gain_;
         const float dry_gain = 1.0f - wet_gain_ * 0.5f;
 
         // Stereo spreading
@@ -118,60 +153,69 @@ public:
 
 private:
     void process_new_block() noexcept {
+        if (num_tail_partitions_ == 0) return;
+
         // Shift time input buffer (overlap-save): copy second half to first half
         for (size_t i = 0; i < BLOCK_SIZE; ++i) {
             time_input_buffer_[i] = time_input_buffer_[i + BLOCK_SIZE];
             time_input_buffer_[i + BLOCK_SIZE] = current_input_block_[i];
         }
 
-        // Forward FFT of current [x_{n-1}, x_n] input window
-        std::vector<Complex> x_fft(FFT_SIZE);
+        // Forward FFT of current [x_{n-1}, x_n] input window (using pre-allocated buffer)
         for (size_t i = 0; i < FFT_SIZE; ++i) {
-            x_fft[i] = Complex(time_input_buffer_[i], 0.0f);
+            x_fft_[i] = Complex(time_input_buffer_[i], 0.0f);
         }
-        math::FFT::forward(x_fft);
+        math::FFT::forward(x_fft_);
 
         // Shift input history pointer (circular buffer of frequency-domain blocks)
-        history_head_ = (history_head_ + num_partitions_ - 1) % num_partitions_;
+        history_head_ = (history_head_ + num_tail_partitions_ - 1) % num_tail_partitions_;
         for (size_t k = 0; k < FFT_SIZE; ++k) {
-            input_history_[history_head_ * FFT_SIZE + k] = x_fft[k];
+            input_history_[history_head_ * FFT_SIZE + k] = x_fft_[k];
         }
 
-        // Frequency-domain complex multiply-accumulate: Y = sum_{p=0}^{P-1} X_p * H_p
-        std::vector<Complex> y_accum(FFT_SIZE, Complex(0.0f, 0.0f));
-        for (size_t p = 0; p < num_partitions_; ++p) {
-            const size_t hist_idx = (history_head_ + p) % num_partitions_;
+        // Frequency-domain complex multiply-accumulate: Y = sum_{p=0}^{P_tail-1} X_p * H_p
+        y_accum_.fill(Complex(0.0f, 0.0f));
+        for (size_t p = 0; p < num_tail_partitions_; ++p) {
+            const size_t hist_idx = (history_head_ + p) % num_tail_partitions_;
             const size_t h_base = p * FFT_SIZE;
             const size_t x_base = hist_idx * FFT_SIZE;
 
             for (size_t k = 0; k < FFT_SIZE; ++k) {
                 const Complex x_val = input_history_[x_base + k];
                 const Complex h_val = freq_partitions_[h_base + k];
-                y_accum[k] += x_val * h_val;
+                y_accum_[k] += x_val * h_val;
             }
         }
 
         // Inverse FFT of accumulated frequency response
-        math::FFT::inverse(y_accum);
+        math::FFT::inverse(y_accum_);
 
         // Overlap-save: discard the first BLOCK_SIZE samples, save second BLOCK_SIZE samples
         for (size_t i = 0; i < BLOCK_SIZE; ++i) {
-            output_fifo_[i] = y_accum[i + BLOCK_SIZE].real();
+            tail_output_fifo_[i] = y_accum_[i + BLOCK_SIZE].real();
         }
 
-        std::fill(current_input_block_.begin(), current_input_block_.end(), 0.0f);
+        current_input_block_.fill(0.0f);
     }
 
     size_t num_partitions_{0};
+    size_t num_tail_partitions_{0};
     float wet_gain_{0.5f};
     size_t history_head_{0};
     size_t fifo_read_idx_{BLOCK_SIZE};
+    size_t head_cursor_{0};
+
+    std::array<float, BLOCK_SIZE> head_ir_{};
+    std::array<float, BLOCK_SIZE> head_history_{};
 
     std::vector<Complex> freq_partitions_;
     std::vector<Complex> input_history_;
-    std::vector<float> time_input_buffer_{std::vector<float>(FFT_SIZE, 0.0f)};
+    std::array<float, FFT_SIZE> time_input_buffer_{};
     std::array<float, BLOCK_SIZE> current_input_block_{};
-    std::vector<float> output_fifo_{std::vector<float>(BLOCK_SIZE, 0.0f)};
+    std::array<float, BLOCK_SIZE> tail_output_fifo_{};
+
+    std::array<Complex, FFT_SIZE> x_fft_{};
+    std::array<Complex, FFT_SIZE> y_accum_{};
 };
 
 } // namespace aether::dsp::fx

@@ -29,6 +29,7 @@ public:
     }
 
     void configure(FilterType type, float cutoff_hz, float q, float sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE)) noexcept {
+        sample_rate = std::clamp(sample_rate, 1000.0f, 384000.0f);
         cutoff_hz = std::clamp(cutoff_hz, 10.0f, sample_rate * 0.49f);
         q = std::max(0.1f, q);
 
@@ -96,6 +97,8 @@ public:
         const Sample out = b0_ * in + s1_;
         s1_ = b1_ * in - a1_ * out + s2_;
         s2_ = b2_ * in - a2_ * out;
+        if (std::abs(s1_) < 1e-15f) s1_ = 0.0f;
+        if (std::abs(s2_) < 1e-15f) s2_ = 0.0f;
         return out;
     }
 

@@ -44,7 +44,10 @@ public:
     void init_geometry() {
         dz_ = config_.horn_length_m / (NUM_CELLS - 1);
         c_ = config_.speed_of_sound;
-        courant_ = (c_ * dt_) / dz_;
+        const float raw_courant = (c_ * dt_) / dz_;
+        substeps_ = static_cast<size_t>(std::ceil(raw_courant / 0.70f));
+        if (substeps_ < 1) substeps_ = 1;
+        courant_ = (c_ * (dt_ / static_cast<float>(substeps_))) / dz_;
 
         area_.resize(NUM_CELLS);
         p_current_.assign(NUM_CELLS, 0.0f);
@@ -93,29 +96,30 @@ public:
      */
     StereoFrame step() noexcept {
         const float r2 = courant_ * courant_;
-        const float gamma = 1.0f - config_.damping;
+        const float gamma = 1.0f - (config_.damping / static_cast<float>(substeps_));
 
-        // Interior Webster horn finite-difference update:
-        // p^{n+1}_i = 2*p^n_i - p^{n-1}_i + (c*dt/dz)^2 * [ (S_{i+1/2}*(p_{i+1}-p_i) - S_{i-1/2}*(p_i-p_{i-1})) / S_i ]
-        for (size_t i = 1; i < NUM_CELLS - 1; ++i) {
-            const float s_mid_plus  = 0.5f * (area_[i] + area_[i + 1]);
-            const float s_mid_minus = 0.5f * (area_[i] + area_[i - 1]);
+        for (size_t sub = 0; sub < substeps_; ++sub) {
+            // Interior Webster horn finite-difference update:
+            for (size_t i = 1; i < NUM_CELLS - 1; ++i) {
+                const float s_mid_plus  = 0.5f * (area_[i] + area_[i + 1]);
+                const float s_mid_minus = 0.5f * (area_[i] + area_[i - 1]);
 
-            const float spatial_deriv = (s_mid_plus * (p_current_[i + 1] - p_current_[i]) -
-                                         s_mid_minus * (p_current_[i] - p_current_[i - 1])) / area_[i];
+                const float spatial_deriv = (s_mid_plus * (p_current_[i + 1] - p_current_[i]) -
+                                             s_mid_minus * (p_current_[i] - p_current_[i - 1])) / area_[i];
 
-            p_next_[i] = (2.0f * p_current_[i] - p_previous_[i] * gamma + r2 * spatial_deriv) * gamma;
+                p_next_[i] = (2.0f * p_current_[i] - p_previous_[i] * gamma + r2 * spatial_deriv) * gamma;
+            }
+
+            p_next_[0] = p_current_[1] * 0.98f;
+
+            const float p_bell = p_current_[NUM_CELLS - 2];
+            const float radiation_cutoff = 0.25f / static_cast<float>(substeps_);
+            bell_radiation_state_ = bell_radiation_state_ * (1.0f - radiation_cutoff) + p_bell * radiation_cutoff;
+            p_next_[NUM_CELLS - 1] = -(p_bell - bell_radiation_state_) * 0.85f;
+
+            std::copy(p_current_.begin(), p_current_.end(), p_previous_.begin());
+            std::copy(p_next_.begin(), p_next_.end(), p_current_.begin());
         }
-
-        p_next_[0] = p_current_[1] * 0.98f;
-
-        const float p_bell = p_current_[NUM_CELLS - 2];
-        const float radiation_cutoff = 0.25f;
-        bell_radiation_state_ = bell_radiation_state_ * (1.0f - radiation_cutoff) + p_bell * radiation_cutoff;
-        p_next_[NUM_CELLS - 1] = -(p_bell - bell_radiation_state_) * 0.85f;
-
-        std::copy(p_current_.begin(), p_current_.end(), p_previous_.begin());
-        std::copy(p_next_.begin(), p_next_.end(), p_current_.begin());
 
         const float radiated_pressure = (p_current_[NUM_CELLS - 1] - p_previous_[NUM_CELLS - 1]) * 4.0f;
         const float out_l = radiated_pressure * 0.85f + p_current_[0] * 0.15f;
@@ -146,6 +150,7 @@ private:
     float dz_{0.01f};
     float c_{343.0f};
     float courant_{0.5f};
+    size_t substeps_{1};
     float bell_radiation_state_{0.0f};
     float lip_phase_{0.0f};
 

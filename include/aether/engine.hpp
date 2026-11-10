@@ -55,24 +55,24 @@ enum class Preset {
 class Engine {
 public:
     explicit Engine(uint32_t sample_rate = DEFAULT_SAMPLE_RATE) noexcept
-        : sample_rate_(sample_rate),
-          von_karman_(sample_rate),
-          pseudosphere_(sample_rate),
-          polyphony_(sample_rate),
-          string_(sample_rate),
-          spatializer3d_(sample_rate),
-          sine_gordon_(sample_rate),
-          acoustic_bh_(sample_rate),
-          wormhole_(sample_rate),
-          topological_(sample_rate),
-          soliton_lattice_(sample_rate) {
+        : sample_rate_(sample_rate >= 8000 && sample_rate <= 192000 ? sample_rate : DEFAULT_SAMPLE_RATE),
+          von_karman_(sample_rate_),
+          pseudosphere_(sample_rate_),
+          string_(sample_rate_),
+          sine_gordon_(sample_rate_),
+          acoustic_bh_(sample_rate_),
+          wormhole_(sample_rate_),
+          topological_(sample_rate_),
+          soliton_lattice_(sample_rate_),
+          spatializer3d_(sample_rate_),
+          polyphony_(sample_rate_) {
         init();
     }
 
     void init() noexcept {
         filter_l_.configure(dsp::FilterType::Lowpass, 12000.0f, 0.707f, static_cast<float>(sample_rate_));
         filter_r_.configure(dsp::FilterType::Lowpass, 12000.0f, 0.707f, static_cast<float>(sample_rate_));
-        env_.configure(0.005f, 0.8f, 0.0f, 1.5f, static_cast<float>(sample_rate_));
+        env_.configure(0.005f, 0.8f, 0.7f, 1.2f, static_cast<float>(sample_rate_));
         reverb_.configure(0.82f, 0.25f, 0.28f);
         load_preset(Preset::HyperbolicCosmicBell);
     }
@@ -98,6 +98,8 @@ public:
                 chaos_.configure(engines::AttractorType::Lorenz, 0.85f);
                 filter_l_.configure(dsp::FilterType::Lowpass, 4500.0f, 2.5f, static_cast<float>(sample_rate_));
                 filter_r_.configure(dsp::FilterType::Lowpass, 4500.0f, 2.5f, static_cast<float>(sample_rate_));
+                env_.configure(0.05f, 0.1f, 1.0f, 0.5f, static_cast<float>(sample_rate_));
+                env_.gate(true);
                 reverb_.configure(0.92f, 0.15f, 0.40f);
                 break;
 
@@ -201,7 +203,7 @@ public:
             waveguide_.strike(strike_coord, velocity, 0.15f);
         }
 
-        if (current_preset_ == Preset::ChladniPlateGong || current_preset_ == Preset::HyperbolicAetherSpace) {
+        if (current_preset_ == Preset::ChladniPlateGong || current_preset_ == Preset::HyperbolicAetherSpace || current_preset_ == Preset::BowedCrystalPlate) {
             chladni_.strike(strike_coord, velocity);
         }
 
@@ -379,6 +381,14 @@ public:
                 }
             }
 
+            // Apply monophonic envelope to the monophonic synthesizer output
+            if (env_.is_active()) {
+                const float env_gain = env_.process();
+                sample = sample * env_gain;
+            } else {
+                sample = StereoFrame{0.0f, 0.0f};
+            }
+
             // Mix in active polyphonic chord voices if any
             if (polyphony_.active_voices() > 0) {
                 sample = sample + polyphony_.step();
@@ -391,9 +401,11 @@ public:
             // Hyperbolic FDN Reverb
             sample = reverb_.process(sample);
 
-            // Soft-clipping saturation
+            // Monotonic soft-clipping saturation (never inverts phase/sign for loud inputs)
             auto soft_clip = [](Sample x) noexcept -> Sample {
-                return std::clamp(x * (1.5f - 0.5f * x * x), -1.0f, 1.0f);
+                if (x <= -1.0f) return -1.0f;
+                if (x >= 1.0f) return 1.0f;
+                return x * (1.5f - 0.5f * x * x);
             };
 
             frame.left = soft_clip(sample.left);
@@ -416,6 +428,8 @@ public:
     [[nodiscard]] dsp::fx::HyperbolicSpatializer3D& spatializer3d() noexcept { return spatializer3d_; }
     [[nodiscard]] PolyphonyManager<8>& polyphony() noexcept { return polyphony_; }
     [[nodiscard]] dsp::TuningSystem& tuning() noexcept { return tuning_; }
+    [[nodiscard]] dsp::ADSREnvelope& envelope() noexcept { return env_; }
+    [[nodiscard]] const dsp::ADSREnvelope& envelope() const noexcept { return env_; }
     [[nodiscard]] dsp::fx::HyperbolicReverb& reverb() noexcept { return reverb_; }
     [[nodiscard]] uint32_t sample_rate() const noexcept { return sample_rate_; }
 

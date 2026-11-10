@@ -81,7 +81,7 @@ public:
      */
     static void apply_window(std::span<float> data, WindowType window) noexcept {
         const size_t n = data.size();
-        if (n == 0 || window == WindowType::Rectangular) return;
+        if (n <= 1 || window == WindowType::Rectangular) return;
 
         const float inv_n1 = 1.0f / static_cast<float>(n - 1);
         constexpr float PI2 = 2.0f * std::numbers::pi_v<float>;

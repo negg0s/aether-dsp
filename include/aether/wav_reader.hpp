@@ -48,9 +48,10 @@ public:
 
         while (file.read(chunk_id, 4)) {
             uint32_t subchunk_size = 0;
-            file.read(reinterpret_cast<char*>(&subchunk_size), 4);
+            if (!file.read(reinterpret_cast<char*>(&subchunk_size), 4)) break;
 
             if (std::memcmp(chunk_id, "fmt ", 4) == 0) {
+                if (subchunk_size < 16) return result;
                 file.read(reinterpret_cast<char*>(&audio_format), 2);
                 file.read(reinterpret_cast<char*>(&num_channels), 2);
                 file.read(reinterpret_cast<char*>(&sample_rate), 4);
@@ -61,21 +62,37 @@ public:
                 file.read(reinterpret_cast<char*>(&block_align), 2);
                 file.read(reinterpret_cast<char*>(&bits_per_sample), 2);
 
+                if (!file.good()) return result;
+
+                // Validate fmt chunk fields to prevent division by zero or corrupted audio
+                if (num_channels == 0 || num_channels > 8) return result;
+                if (sample_rate < 1000 || sample_rate > 384000) return result;
+                if (bits_per_sample != 8 && bits_per_sample != 16 && bits_per_sample != 24 && bits_per_sample != 32) return result;
+                if (audio_format != 1 && audio_format != 3) return result;
+                if (audio_format == 3 && bits_per_sample != 32) return result;
+
                 if (subchunk_size > 16) {
                     file.seekg(subchunk_size - 16, std::ios::cur);
                 }
                 found_fmt = true;
             } else if (std::memcmp(chunk_id, "data", 4) == 0 && found_fmt) {
                 const size_t bytes_per_sample = bits_per_sample / 8;
-                const size_t total_samples = subchunk_size / bytes_per_sample;
+                if (bytes_per_sample == 0 || num_channels == 0) return result;
+
+                // Sanity bound: max 1GB audio chunk
+                if (subchunk_size > 1024 * 1024 * 1024) return result;
+
+                std::vector<uint8_t> raw_data(subchunk_size);
+                file.read(reinterpret_cast<char*>(raw_data.data()), subchunk_size);
+                const size_t actual_bytes = static_cast<size_t>(file.gcount());
+                if (actual_bytes < bytes_per_sample * num_channels) return result;
+
+                const size_t total_samples = actual_bytes / bytes_per_sample;
                 const size_t total_frames = total_samples / num_channels;
 
                 result.frames.resize(total_frames);
                 result.sample_rate = sample_rate;
                 result.num_channels = num_channels;
-
-                std::vector<uint8_t> raw_data(subchunk_size);
-                file.read(reinterpret_cast<char*>(raw_data.data()), subchunk_size);
 
                 size_t byte_offset = 0;
                 for (size_t f = 0; f < total_frames; ++f) {
@@ -103,6 +120,10 @@ public:
                             if (s24 & 0x800000) s24 |= 0xFF000000;
                             sample_val = static_cast<float>(s24) / 8388608.0f;
                             byte_offset += 3;
+                        } else if (audio_format == 1 && bits_per_sample == 8) {
+                            // 8-bit PCM (unsigned)
+                            sample_val = (static_cast<float>(raw_data[byte_offset]) - 128.0f) / 128.0f;
+                            byte_offset += 1;
                         } else {
                             byte_offset += bytes_per_sample;
                         }
@@ -118,7 +139,9 @@ public:
                 result.valid = true;
                 break;
             } else {
-                file.seekg(subchunk_size, std::ios::cur);
+                // Skip unknown chunk, respecting 2-byte word boundary padding for odd-sized chunks
+                const uint32_t padded_size = subchunk_size + (subchunk_size & 1);
+                file.seekg(padded_size, std::ios::cur);
             }
         }
 

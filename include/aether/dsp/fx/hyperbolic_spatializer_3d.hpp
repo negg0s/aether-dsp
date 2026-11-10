@@ -92,29 +92,33 @@ public:
         const float horiz_dist = std::sqrt(dx * dx + dy * dy);
         elevation_rad_ = std::atan2(dz, std::max(horiz_dist, 1e-4f));
 
-        // Woodworth spherical head model ITD:
-        // delay = (head_radius / c) * (sin(theta) + theta)
+        // Woodworth spherical head model ITD with front/rear acoustic symmetry:
         constexpr float HEAD_RADIUS_M = 0.0875f;
         constexpr float SPEED_OF_SOUND = 343.0f;
 
-        const float sin_az = std::sin(azimuth_rad_);
-        const float abs_az = std::abs(azimuth_rad_);
-        const float itd_sec = (HEAD_RADIUS_M / SPEED_OF_SOUND) * (std::abs(sin_az) + abs_az * 0.5f);
+        const float pi = static_cast<float>(constants::PI);
+        float abs_az = std::fmod(std::abs(azimuth_rad_), 2.0f * pi);
+        if (abs_az > pi) abs_az = 2.0f * pi - abs_az;
+        const float theta_inc = (abs_az > 0.5f * pi) ? (pi - abs_az) : abs_az;
+
+        const float sin_az = std::sin(theta_inc);
+        const float itd_sec = (HEAD_RADIUS_M / SPEED_OF_SOUND) * (sin_az + theta_inc * 0.5f);
 
         const float delay_samples = itd_sec * sample_rate_;
-        if (azimuth_rad_ >= 0.0f) {
+        const float sin_full = std::sin(azimuth_rad_);
+        if (sin_full >= 0.0f) {
             // Source is to the left: right ear is delayed and shadowed
             delay_l_ = 2.0f;
             delay_r_ = 2.0f + delay_samples;
             filter_l_.configure(FilterType::Lowpass, 16000.0f, 0.707f, static_cast<float>(sample_rate_));
             // Head shadow lowpass: 3 kHz to 8 kHz depending on angle
-            const float shadow_cutoff = 16000.0f - (16000.0f - 3200.0f) * std::abs(sin_az);
+            const float shadow_cutoff = 16000.0f - (16000.0f - 3200.0f) * sin_az;
             filter_r_.configure(FilterType::Lowpass, shadow_cutoff, 0.707f, static_cast<float>(sample_rate_));
         } else {
             // Source is to the right: left ear is delayed and shadowed
             delay_l_ = 2.0f + delay_samples;
             delay_r_ = 2.0f;
-            const float shadow_cutoff = 16000.0f - (16000.0f - 3200.0f) * std::abs(sin_az);
+            const float shadow_cutoff = 16000.0f - (16000.0f - 3200.0f) * sin_az;
             filter_l_.configure(FilterType::Lowpass, shadow_cutoff, 0.707f, static_cast<float>(sample_rate_));
             filter_r_.configure(FilterType::Lowpass, 16000.0f, 0.707f, static_cast<float>(sample_rate_));
         }

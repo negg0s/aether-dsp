@@ -64,7 +64,8 @@ public:
         // Inject excitation at left end of interface (x = 2..4)
         for (size_t x = 1; x <= 4; ++x) {
             const size_t idx = INTERFACE_Y * WIDTH + x;
-            const float pulse = velocity * std::exp(-static_cast<float>(x - 2) * 0.5f);
+            const float diff = static_cast<float>(x) - 2.0f;
+            const float pulse = velocity * std::exp(-std::abs(diff) * 0.5f);
             u_[idx] += pulse;
             u_prev_[idx] += pulse * 0.5f;
         }
@@ -87,8 +88,11 @@ public:
      * Right channel: Bulk acoustic radiation.
      */
     StereoFrame process() noexcept {
-        const float c2 = v_d_ * v_d_;
-        const float damp_factor = 1.0f / (1.0f + damping_);
+        const float rate_scale = static_cast<float>(DEFAULT_SAMPLE_RATE) / static_cast<float>(sample_rate_);
+        const float effective_vd = std::min(v_d_ * rate_scale, 0.48f);
+        const float c2 = effective_vd * effective_vd;
+        const float effective_damping = damping_ * rate_scale;
+        const float damp_factor = 1.0f / (1.0f + effective_damping);
 
         // 2D Finite Difference on hexagonal/staggered acoustic lattice
         for (size_t y = 1; y < HEIGHT - 1; ++y) {
@@ -100,9 +104,9 @@ public:
                                         u_[idx + WIDTH] + u_[idx - WIDTH] - 4.0f * u_[idx];
 
                 // Topological mass potential restoring term V(x, y) * u
-                const float m_term = mass_profile_[idx] * 0.08f * u_[idx];
+                const float m_term = mass_profile_[idx] * 0.08f * u_[idx] * rate_scale * rate_scale;
 
-                u_next_[idx] = ((2.0f - damping_) * u_[idx] - u_prev_[idx] + c2 * laplacian - m_term) * damp_factor;
+                u_next_[idx] = ((2.0f - effective_damping) * u_[idx] - u_prev_[idx] + c2 * laplacian - m_term) * damp_factor;
             }
         }
 

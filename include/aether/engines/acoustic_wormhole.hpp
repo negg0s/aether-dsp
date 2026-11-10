@@ -96,8 +96,11 @@ public:
      * Returns StereoFrame {Universe A, Universe B}.
      */
     StereoFrame process() noexcept {
-        const float c2 = c_ * c_;
-        const float damp_factor = 1.0f / (1.0f + damping_);
+        const float rate_scale = static_cast<float>(DEFAULT_SAMPLE_RATE) / static_cast<float>(sample_rate_);
+        const float effective_c = std::min(c_ * rate_scale, 0.48f);
+        const float c2 = effective_c * effective_c;
+        const float effective_damping = damping_ * rate_scale;
+        const float damp_factor = 1.0f / (1.0f + effective_damping);
 
         // Outer asymptotic open/absorbing boundaries at infinity (index UNIVERSE_GRID - 1)
         u_a_next_[UNIVERSE_GRID - 1] = u_a_[UNIVERSE_GRID - 2] * 0.94f;
@@ -107,14 +110,14 @@ public:
             const float r = static_cast<float>(i);
             const float r_factor = 1.0f + 0.5f * (b0_ * b0_) / (1.0f + r * r);
             const float laplacian = (u_a_[i + 1] - 2.0f * u_a_[i] + u_a_[i - 1]) * r_factor;
-            u_a_next_[i] = ((2.0f - damping_) * u_a_[i] - u_a_prev_[i] + c2 * laplacian) * damp_factor;
+            u_a_next_[i] = ((2.0f - effective_damping) * u_a_[i] - u_a_prev_[i] + c2 * laplacian) * damp_factor;
         }
 
         for (size_t i = 1; i < UNIVERSE_GRID - 1; ++i) {
             const float r = static_cast<float>(i);
             const float r_factor = 1.0f + 0.5f * (b0_ * b0_) / (1.0f + r * r);
             const float laplacian = (u_b_[i + 1] - 2.0f * u_b_[i] + u_b_[i - 1]) * r_factor;
-            u_b_next_[i] = ((2.0f - damping_) * u_b_[i] - u_b_prev_[i] + c2 * laplacian) * damp_factor;
+            u_b_next_[i] = ((2.0f - effective_damping) * u_b_[i] - u_b_prev_[i] + c2 * laplacian) * damp_factor;
         }
 
         // Throat boundaries couple to Universe A (u_a_[0]) and Universe B (u_b_[0])

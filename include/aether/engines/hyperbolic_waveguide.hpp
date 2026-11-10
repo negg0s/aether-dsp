@@ -123,7 +123,11 @@ public:
 
                 // Wave update: (2 * u_c - prev_factor * u_p + c^2 * lap_h) * inv_denom
                 const __m256 u_p = _mm256_loadu_ps(&u_prev_[idx]);
+#if defined(__FMA__)
                 __m256 term = _mm256_fmadd_ps(v_two, u_c, _mm256_mul_ps(v_c2, lap_h));
+#else
+                __m256 term = _mm256_add_ps(_mm256_mul_ps(v_two, u_c), _mm256_mul_ps(v_c2, lap_h));
+#endif
                 term = _mm256_sub_ps(term, _mm256_mul_ps(v_prev_fac, u_p));
                 __m256 u_new = _mm256_mul_ps(term, v_inv_denom);
 

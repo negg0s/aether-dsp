@@ -66,12 +66,35 @@ struct ParameterInfo {
 };
 
 inline const ParameterInfo PARAMETER_CATALOG[] = {
-    {PARAM_PRESET, "Preset Selection", 0.0f, 3.0f, 0.0f},
+    {PARAM_PRESET, "Preset Selection", 0.0f, 13.0f, 0.0f},
     {PARAM_CURVATURE, "Hyperbolic Curvature (K)", 0.1f, 3.0f, 1.0f},
     {PARAM_DAMPING, "Wave Absorption", 0.0001f, 0.05f, 0.003f},
     {PARAM_STIFFNESS, "Plate Rigidity (D)", 0.2f, 2.5f, 1.15f},
     {PARAM_REVERB_MIX, "FDN Reverb Wet Mix", 0.0f, 1.0f, 0.30f},
     {PARAM_FILTER_CUTOFF, "Master Lowpass Cutoff", 200.0f, 18000.0f, 12000.0f}
 };
+
+struct clap_version_t {
+    uint32_t major{1};
+    uint32_t minor{1};
+    uint32_t revision{10};
+};
+
+struct clap_plugin_entry_t {
+    clap_version_t clap_version{1, 1, 10};
+    bool (*init)(const char* plugin_path){nullptr};
+    void (*deinit)(){nullptr};
+    const void* (*get_factory)(const char* factory_id){nullptr};
+};
+
+inline const clap_plugin_entry_t& get_entry() noexcept {
+    static const clap_plugin_entry_t entry{
+        .clap_version = {1, 1, 10},
+        .init = [](const char*) noexcept -> bool { return true; },
+        .deinit = []() noexcept {},
+        .get_factory = [](const char*) noexcept -> const void* { return nullptr; }
+    };
+    return entry;
+}
 
 } // namespace aether::plugin

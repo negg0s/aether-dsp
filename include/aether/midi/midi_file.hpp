@@ -5,6 +5,7 @@
 #include <string>
 #include <fstream>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <algorithm>
 
@@ -105,22 +106,30 @@ public:
 
         char chunk_id[4];
         in.read(chunk_id, 4);
-        if (std::string(chunk_id, 4) != "MThd") return false;
+        if (in.gcount() != 4 || std::memcmp(chunk_id, "MThd", 4) != 0) return false;
 
         uint32_t header_len = read_be32(in);
-        (void)header_len;
+        if (!in.good() || header_len < 6) return false;
         format = read_be16(in);
         uint16_t num_tracks = read_be16(in);
         ticks_per_quarter_note = read_be16(in);
+        if (!in.good()) return false;
+
+        if (header_len > 6) {
+            in.seekg(header_len - 6, std::ios::cur);
+            if (!in.good()) return false;
+        }
 
         tracks.clear();
         for (uint16_t t = 0; t < num_tracks && in.good(); ++t) {
             in.read(chunk_id, 4);
-            if (std::string(chunk_id, 4) != "MTrk") break;
+            if (in.gcount() != 4 || std::memcmp(chunk_id, "MTrk", 4) != 0) break;
 
             uint32_t track_len = read_be32(in);
+            if (!in.good() || track_len > 64 * 1024 * 1024) break; // 64MB sanity bound
             std::vector<uint8_t> buffer(track_len);
             in.read(reinterpret_cast<char*>(buffer.data()), track_len);
+            if (static_cast<size_t>(in.gcount()) != track_len) break;
 
             MidiTrack track;
             size_t cursor = 0;
@@ -138,24 +147,40 @@ public:
 
                 if (running_status == 0xFF) {
                     // Meta event
+                    if (cursor >= buffer.size()) break;
                     uint8_t meta_type = buffer[cursor++];
                     uint32_t len = read_vlq(buffer, cursor);
                     std::vector<uint8_t> meta_data;
                     if (cursor + len <= buffer.size()) {
                         meta_data.assign(buffer.begin() + cursor, buffer.begin() + cursor + len);
                         cursor += len;
+                    } else {
+                        break;
                     }
                     if (meta_type == 0x2F) break; // End of track delimiter
                     track.events.push_back({delta, 0xFF, 0, meta_type, 0, meta_data});
-                } else {
+                } else if (running_status == 0xF0 || running_status == 0xF7) {
+                    // SysEx event
+                    uint32_t len = read_vlq(buffer, cursor);
+                    if (cursor + len <= buffer.size()) {
+                        cursor += len;
+                    } else {
+                        break;
+                    }
+                } else if (running_status >= 0x80) {
                     uint8_t type = running_status & 0xF0;
                     uint8_t channel = running_status & 0x0F;
+                    if (cursor >= buffer.size()) break;
                     uint8_t d1 = buffer[cursor++];
                     uint8_t d2 = 0;
-                    if (type != 0xC0 && type != 0xD0 && cursor < buffer.size()) {
+                    if (type != 0xC0 && type != 0xD0) {
+                        if (cursor >= buffer.size()) break;
                         d2 = buffer[cursor++];
                     }
                     track.events.push_back({delta, type, channel, d1, d2, {}});
+                } else {
+                    // Invalid running status without prior status byte
+                    break;
                 }
             }
 
@@ -182,14 +207,16 @@ private:
     }
 
     static uint16_t read_be16(std::ifstream& in) {
-        uint8_t b[2];
+        uint8_t b[2] = {0, 0};
         in.read(reinterpret_cast<char*>(b), 2);
+        if (in.gcount() != 2) return 0;
         return (static_cast<uint16_t>(b[0]) << 8) | b[1];
     }
 
     static uint32_t read_be32(std::ifstream& in) {
-        uint8_t b[4];
+        uint8_t b[4] = {0, 0, 0, 0};
         in.read(reinterpret_cast<char*>(b), 4);
+        if (in.gcount() != 4) return 0;
         return (static_cast<uint32_t>(b[0]) << 24) |
                (static_cast<uint32_t>(b[1]) << 16) |
                (static_cast<uint32_t>(b[2]) << 8) |
@@ -213,10 +240,12 @@ private:
     static uint32_t read_vlq(const std::vector<uint8_t>& buf, size_t& cursor) {
         uint32_t value = 0;
         uint8_t byte = 0;
+        size_t count = 0;
         do {
-            if (cursor >= buf.size()) return value;
+            if (cursor >= buf.size() || count >= 4) return value;
             byte = buf[cursor++];
             value = (value << 7) | (byte & 0x7F);
+            count++;
         } while (byte & 0x80);
         return value;
     }

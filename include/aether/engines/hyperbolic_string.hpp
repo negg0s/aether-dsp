@@ -61,14 +61,22 @@ public:
             jawari_profile_[i] = -config_.jawari_height * (1.0f - sech_u);
         }
 
-        c0_ = 2.0f * config_.length_m * config_.fundamental_hz;
-        courant_ = (c0_ * dt_) / dx_;
+        update_parameters();
     }
 
     void set_pitch(float hz) noexcept {
         config_.fundamental_hz = std::clamp(hz, 30.0f, 1200.0f);
+        update_parameters();
+    }
+
+    void update_parameters() noexcept {
         c0_ = 2.0f * config_.length_m * config_.fundamental_hz;
-        courant_ = (c0_ * dt_) / dx_;
+        const float raw_courant = (c0_ * dt_) / dx_;
+        // CFL condition: sub-step so that Courant number per sub-step is <= 0.65
+        substeps_ = static_cast<size_t>(std::ceil(raw_courant / 0.65f));
+        if (substeps_ < 1) substeps_ = 1;
+        if (substeps_ > 8) substeps_ = 8;
+        courant_ = (c0_ * (dt_ / static_cast<float>(substeps_))) / dx_;
     }
 
     /**
@@ -98,53 +106,57 @@ public:
      * @brief Step the nonlinear Kirchhoff-Jawari string by one sample.
      */
     StereoFrame step() noexcept {
-        // 1. Calculate string tension modulation integral: int (dy/dx)^2 dx
-        float gradient_energy = 0.0f;
-        for (size_t i = 0; i < NUM_POINTS - 1; ++i) {
-            const float slope = (y_current_[i + 1] - y_current_[i]) / dx_;
-            gradient_energy += slope * slope * dx_;
-        }
-
-        // Nonlinear wave velocity: c^2 = c0^2 * (1 + kappa * gradient_energy)
-        const float c2 = c0_ * c0_ * (1.0f + config_.tension_nonlinearity * gradient_energy);
-        const float r2 = (c2 * dt_ * dt_) / (dx_ * dx_);
-
-        // Bending stiffness coefficient: mu = E*I / (rho*A) * dt^2 / dx^4
-        const float mu = (config_.stiffness * dt_ * dt_) / (dx_ * dx_ * dx_ * dx_);
-
+        const float dt_sub = dt_ / static_cast<float>(substeps_);
         const float b1 = config_.damping_freq_indep;
         const float b2 = config_.damping_freq_dep;
-        const float inv_denom = 1.0f / (1.0f + b1 * dt_);
+        const float inv_denom = 1.0f / (1.0f + b1 * dt_sub);
 
-        // 2. Interior FDTD update for stiff string
-        for (size_t i = 2; i < NUM_POINTS - 2; ++i) {
-            const float d2y = y_current_[i + 1] - 2.0f * y_current_[i] + y_current_[i - 1];
-            const float d4y = y_current_[i + 2] - 4.0f * y_current_[i + 1] + 6.0f * y_current_[i]
-                              - 4.0f * y_current_[i - 1] + y_current_[i - 2];
+        for (size_t sub = 0; sub < substeps_; ++sub) {
+            // 1. Calculate string tension modulation integral: int (dy/dx)^2 dx
+            float gradient_energy = 0.0f;
+            for (size_t i = 0; i < NUM_POINTS - 1; ++i) {
+                const float slope = (y_current_[i + 1] - y_current_[i]) / dx_;
+                gradient_energy += slope * slope * dx_;
+            }
+            gradient_energy = std::clamp(gradient_energy, 0.0f, 10.0f);
 
-            const float damp_term = (2.0f * b2 * dt_ / (dx_ * dx_)) *
-                ((y_current_[i + 1] - 2.0f * y_current_[i] + y_current_[i - 1]) -
-                 (y_previous_[i + 1] - 2.0f * y_previous_[i] + y_previous_[i - 1]));
+            // Nonlinear wave velocity: c^2 = c0^2 * (1 + kappa * gradient_energy)
+            const float c2 = c0_ * c0_ * (1.0f + config_.tension_nonlinearity * gradient_energy);
+            const float r2 = (c2 * dt_sub * dt_sub) / (dx_ * dx_);
 
-            float y_new = (2.0f * y_current_[i] - y_previous_[i] * (1.0f - b1 * dt_)
-                           + r2 * d2y - mu * d4y + damp_term) * inv_denom;
+            // Bending stiffness coefficient: mu = E*I / (rho*A) * dt^2 / dx^4
+            const float mu = (config_.stiffness * dt_sub * dt_sub) / (dx_ * dx_ * dx_ * dx_);
 
-            const float penetration = jawari_profile_[i] - y_new;
-            if (penetration > 0.0f) {
-                const float contact_force = config_.jawari_stiffness * penetration * std::sqrt(penetration);
-                y_new += (contact_force * dt_ * dt_);
+            // 2. Interior FDTD update for stiff string
+            for (size_t i = 2; i < NUM_POINTS - 2; ++i) {
+                const float d2y = y_current_[i + 1] - 2.0f * y_current_[i] + y_current_[i - 1];
+                const float d4y = y_current_[i + 2] - 4.0f * y_current_[i + 1] + 6.0f * y_current_[i]
+                                  - 4.0f * y_current_[i - 1] + y_current_[i - 2];
+
+                const float damp_term = (2.0f * b2 * dt_sub / (dx_ * dx_)) *
+                    ((y_current_[i + 1] - 2.0f * y_current_[i] + y_current_[i - 1]) -
+                     (y_previous_[i + 1] - 2.0f * y_previous_[i] + y_previous_[i - 1]));
+
+                float y_new = (2.0f * y_current_[i] - y_previous_[i] * (1.0f - b1 * dt_sub)
+                               + r2 * d2y - mu * d4y + damp_term) * inv_denom;
+
+                const float penetration = jawari_profile_[i] - y_new;
+                if (penetration > 0.0f) {
+                    const float contact_force = config_.jawari_stiffness * penetration * std::sqrt(penetration);
+                    y_new += (contact_force * dt_sub * dt_sub);
+                }
+
+                y_next_[i] = std::clamp(y_new, -0.05f, 0.05f);
             }
 
-            y_next_[i] = y_new;
+            y_next_[0] = 0.0f;
+            y_next_[NUM_POINTS - 1] = 0.0f;
+            y_next_[1] = y_next_[2] * 0.5f;
+            y_next_[NUM_POINTS - 2] = y_next_[NUM_POINTS - 3] * 0.5f;
+
+            std::copy(y_current_.begin(), y_current_.end(), y_previous_.begin());
+            std::copy(y_next_.begin(), y_next_.end(), y_current_.begin());
         }
-
-        y_next_[0] = 0.0f;
-        y_next_[NUM_POINTS - 1] = 0.0f;
-        y_next_[1] = y_next_[2] * 0.5f;
-        y_next_[NUM_POINTS - 2] = y_next_[NUM_POINTS - 3] * 0.5f;
-
-        std::copy(y_current_.begin(), y_current_.end(), y_previous_.begin());
-        std::copy(y_next_.begin(), y_next_.end(), y_current_.begin());
 
         constexpr size_t PICKUP_L = NUM_POINTS / 6;
         constexpr size_t PICKUP_R = NUM_POINTS / 2 + 4;
@@ -173,6 +185,7 @@ private:
     float dx_{0.01f};
     float c0_{300.0f};
     float courant_{0.5f};
+    size_t substeps_{1};
     Config config_;
 
     std::vector<float> y_current_;

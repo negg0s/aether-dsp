@@ -40,21 +40,51 @@
 #else
 #include <termios.h>
 #include <unistd.h>
-int _getch() { return getchar(); }
-int _kbhit() { return 1; }
+#include <sys/select.h>
+
+static int _kbhit() {
+    struct timeval tv{0, 0};
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(STDIN_FILENO, &fds);
+    return select(STDIN_FILENO + 1, &fds, nullptr, nullptr, &tv) > 0;
+}
+
+static int _getch() {
+    char ch = 0;
+    if (read(STDIN_FILENO, &ch, 1) > 0) return static_cast<unsigned char>(ch);
+    return -1;
+}
+
+struct RawTerminalScope {
+    struct termios orig{};
+    bool active{false};
+    RawTerminalScope() {
+        if (tcgetattr(STDIN_FILENO, &orig) == 0) {
+            struct termios raw = orig;
+            raw.c_lflag &= ~(ICANON | ECHO);
+            tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+            active = true;
+        }
+    }
+    ~RawTerminalScope() {
+        if (active) {
+            tcsetattr(STDIN_FILENO, TCSANOW, &orig);
+        }
+    }
+};
 #endif
 
 namespace fs = std::filesystem;
 
 void print_banner() {
-    std::cout << "\033[1;36m";
-    std::cout << R"(
-    ___        __  __                 ____  _____ ____  
-   /   | ___  / /_/ /_  ___  _____   / __ \/ ___// __ \ 
-  / /| |/ _ \/ __/ __ \/ _ \/ ___/  / / / /\__ \/ /_/ / 
- / ___ /  __/ /_/ / / /  __/ /     / /_/ /___/ / ____/  
-/_/  |_\___/\__/_/ /_/\___/_/     /_____//____/_/       
-    )" << "\033[0m\n";
+    std::cout << "\033[1;36m"
+              << "    ___        __  __                 ____  _____ ____\n"
+              << "   /   | ___  / /_/ /_  ___  _____   / __ \\/ ___// __ \\\n"
+              << "  / /| |/ _ \\/ __/ __ \\/ _ \\/ ___/  / / / /\\__ \\/ /_/ /\n"
+              << " / ___ /  __/ /_/ / / /  __/ /     / /_/ /___/ / ____/\n"
+              << "/_/  |_\\___/\\__/_/ /_/\\___/_/     /_____//____/_/\n"
+              << "\033[0m\n";
     std::cout << "\033[1;33m[Non-Euclidean Hyperbolic Waveguide & Modal Cymatics Engine (C++20)]\033[0m\n";
     std::cout << "\033[90mBuilt by Emir (negg0s) | AVX2 SIMD | 3D Binaural | SMF MIDI | Live TUI\033[0m\n\n";
 }
@@ -790,9 +820,12 @@ void run_live_interactive() {
     std::cout << "  Tuning     : \033[1m[ [ ] Previous Scale    [ ] ] Next Scale\033[0m\n";
     std::cout << "  Quit       : \033[1;31m[Q] or [ESC]\033[0m\n\n";
 
+#if !defined(_WIN32)
+    RawTerminalScope term_scope;
+#endif
+
     bool running = true;
     while (running) {
-#if defined(_WIN32)
         if (_kbhit()) {
             int ch = _getch();
             if (ch == 'q' || ch == 'Q' || ch == 27) {
@@ -802,86 +835,88 @@ void run_live_interactive() {
 
             switch (ch) {
                 case '1':
-                    engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+                    audio_device.post_load_preset(aether::Preset::HyperbolicCosmicBell);
                     current_preset_name = "Hyperbolic Cosmic Bell";
                     break;
                 case '2':
-                    engine.load_preset(aether::Preset::ChladniPlateGong);
+                    audio_device.post_load_preset(aether::Preset::ChladniPlateGong);
                     current_preset_name = "Chladni Plate Gong";
                     break;
                 case '3':
-                    engine.load_preset(aether::Preset::ChaoticQuantumDrone);
+                    audio_device.post_load_preset(aether::Preset::ChaoticQuantumDrone);
                     current_preset_name = "Chaotic Quantum Drone";
                     break;
                 case '4':
-                    engine.load_preset(aether::Preset::HyperbolicAetherSpace);
+                    audio_device.post_load_preset(aether::Preset::HyperbolicAetherSpace);
                     current_preset_name = "Hyperbolic Aether Space";
                     break;
                 case '5':
-                    engine.load_preset(aether::Preset::BowedCrystalPlate);
+                    audio_device.post_load_preset(aether::Preset::BowedCrystalPlate);
                     current_preset_name = "Bowed Crystal Plate";
                     break;
                 case '6':
-                    engine.load_preset(aether::Preset::VonKarmanTurbulentGong);
+                    audio_device.post_load_preset(aether::Preset::VonKarmanTurbulentGong);
                     current_preset_name = "Von Karman Gong";
                     break;
                 case '7':
-                    engine.load_preset(aether::Preset::PseudosphereTractrixHorn);
+                    audio_device.post_load_preset(aether::Preset::PseudosphereTractrixHorn);
                     current_preset_name = "Pseudosphere Horn";
                     break;
                 case '8':
-                    engine.load_preset(aether::Preset::HenonHeilesChaos);
+                    audio_device.post_load_preset(aether::Preset::HenonHeilesChaos);
                     current_preset_name = "Henon-Heiles Chaos";
                     break;
                 case '9':
-                    engine.load_preset(aether::Preset::HyperbolicStringJawari);
+                    audio_device.post_load_preset(aether::Preset::HyperbolicStringJawari);
                     current_preset_name = "Sitar Jawari String";
                     break;
                 case '0':
-                    engine.load_preset(aether::Preset::SineGordonBreather);
+                    audio_device.post_load_preset(aether::Preset::SineGordonBreather);
                     current_preset_name = "Sine-Gordon Breather";
                     break;
                 case '-':
-                    engine.load_preset(aether::Preset::AcousticBlackHole);
+                    audio_device.post_load_preset(aether::Preset::AcousticBlackHole);
                     current_preset_name = "Acoustic Black Hole";
                     break;
                 case '=':
-                    engine.load_preset(aether::Preset::AcousticWormhole);
+                    audio_device.post_load_preset(aether::Preset::AcousticWormhole);
                     current_preset_name = "Acoustic Wormhole";
                     break;
                 case 'p': case 'P':
-                    engine.load_preset(aether::Preset::TopologicalMetamaterial);
+                    audio_device.post_load_preset(aether::Preset::TopologicalMetamaterial);
                     current_preset_name = "Topological Metamaterial";
                     break;
                 case 'l': case 'L':
-                    engine.load_preset(aether::Preset::KdvSolitonLattice);
+                    audio_device.post_load_preset(aether::Preset::KdvSolitonLattice);
                     current_preset_name = "Toda Soliton Lattice";
                     break;
 
                 // Scale cycling
                 case '[':
                     current_scale_idx = (current_scale_idx + scales.size() - 1) % scales.size();
+                    audio_device.post_set_scale(current_scale_idx);
                     break;
                 case ']':
                     current_scale_idx = (current_scale_idx + 1) % scales.size();
+                    audio_device.post_set_scale(current_scale_idx);
                     break;
 
                 // Notes
-                case 'a': case 'A': engine.note_on_degree(0, 0.9f); break;
-                case 'w': case 'W': engine.note_on_degree(1, 0.9f); break;
-                case 's': case 'S': engine.note_on_degree(2, 0.9f); break;
-                case 'e': case 'E': engine.note_on_degree(3, 0.9f); break;
-                case 'd': case 'D': engine.note_on_degree(4, 0.9f); break;
-                case 'f': case 'F': engine.note_on_degree(5, 0.9f); break;
-                case 't': case 'T': engine.note_on_degree(6, 0.9f); break;
-                case 'g': case 'G': engine.note_on_degree(7, 0.9f); break;
-                case 'y': case 'Y': engine.note_on_degree(8, 0.9f); break;
-                case 'h': case 'H': engine.note_on_degree(9, 0.9f); break;
-                case 'u': case 'U': engine.note_on_degree(10, 0.9f); break;
-                case 'j': case 'J': engine.note_on_degree(11, 0.9f); break;
-                case 'k': case 'K': engine.note_on_degree(12, 0.9f); break;
+                case 'a': case 'A': audio_device.post_note_on_degree(0, 0.9f); break;
+                case 'w': case 'W': audio_device.post_note_on_degree(1, 0.9f); break;
+                case 's': case 'S': audio_device.post_note_on_degree(2, 0.9f); break;
+                case 'e': case 'E': audio_device.post_note_on_degree(3, 0.9f); break;
+                case 'd': case 'D': audio_device.post_note_on_degree(4, 0.9f); break;
+                case 'f': case 'F': audio_device.post_note_on_degree(5, 0.9f); break;
+                case 't': case 'T': audio_device.post_note_on_degree(6, 0.9f); break;
+                case 'g': case 'G': audio_device.post_note_on_degree(7, 0.9f); break;
+                case 'y': case 'Y': audio_device.post_note_on_degree(8, 0.9f); break;
+                case 'h': case 'H': audio_device.post_note_on_degree(9, 0.9f); break;
+                case 'u': case 'U': audio_device.post_note_on_degree(10, 0.9f); break;
+                case 'j': case 'J': audio_device.post_note_on_degree(11, 0.9f); break;
+                case 'k': case 'K': audio_device.post_note_on_degree(12, 0.9f); break;
                 case ' ':
-                    engine.note_on({(rand() % 100 - 50) / 70.0f, (rand() % 100 - 50) / 70.0f}, 0.95f);
+                    audio_device.post_note_on({(rand() % 100 - 50) / 70.0f, (rand() % 100 - 50) / 70.0f}, 0.95f);
                     break;
             }
 
@@ -892,7 +927,6 @@ void run_live_interactive() {
                       << " \033[90m(Active)\033[0m";
             std::cout.flush();
         }
-#endif
         std::this_thread::sleep_for(std::chrono::milliseconds(15));
     }
 

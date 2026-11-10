@@ -125,8 +125,9 @@ public:
 
 private:
     void init_lattice() noexcept {
-        const float c_max = 0.45f;  // Maximum Courant speed at entrance
-        const float c_min = 0.035f; // Retarded speed near horizon
+        const float rate_scale = static_cast<float>(DEFAULT_SAMPLE_RATE) / static_cast<float>(sample_rate_);
+        const float c_max = std::min(0.45f * rate_scale, 0.48f);  // Maximum Courant speed at entrance
+        const float c_min = 0.035f * rate_scale; // Retarded speed near horizon
 
         for (size_t i = 0; i < LATTICE_SIZE; ++i) {
             const float norm_x = static_cast<float>(i) / static_cast<float>(LATTICE_SIZE - 1);

@@ -1,11 +1,15 @@
 #include "aether/c_api.h"
 #include "aether/engine.hpp"
-#include <vector>
+#include <array>
+#include <algorithm>
 
 extern "C" {
 
 AETHER_API aether_engine_handle_t aether_engine_create(uint32_t sample_rate) {
     try {
+        if (sample_rate < 8000 || sample_rate > 192000) {
+            sample_rate = aether::DEFAULT_SAMPLE_RATE;
+        }
         auto* engine = new aether::Engine(sample_rate);
         return static_cast<aether_engine_handle_t>(engine);
     } catch (...) {
@@ -88,7 +92,7 @@ AETHER_API void aether_engine_process_interleaved(aether_engine_handle_t handle,
     auto* engine = static_cast<aether::Engine*>(handle);
 
     constexpr size_t CHUNK_SIZE = 64;
-    std::vector<aether::StereoFrame> chunk(CHUNK_SIZE);
+    std::array<aether::StereoFrame, CHUNK_SIZE> chunk{};
 
     size_t processed = 0;
     while (processed < num_frames) {

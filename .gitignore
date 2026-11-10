@@ -1,6 +1,7 @@
 # Build directories
 build/
 build_rel/
+build_san/
 bin/
 obj/
 out/
@@ -29,4 +30,5 @@ Thumbs.db
 *.so
 *.dylib
 output/*.wav
+output/*.mid
 
