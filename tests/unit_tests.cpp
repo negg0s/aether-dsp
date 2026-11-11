@@ -1083,8 +1083,160 @@ void test_pseudosphere_horn_low_sample_rate() {
     std::cout << "PASSED\n";
 }
 
+void test_adsr_envelope_zero_sustain_decay() {
+    std::cout << "[TEST] ADSR Envelope Zero Sustain Decay Invariant... ";
+    aether::dsp::ADSREnvelope env;
+    env.configure(0.01f, 0.05f, 0.0f, 0.02f, 48000.0f);
+    env.gate(true);
+
+    // Run into attack/decay stage
+    for (int i = 0; i < 200; ++i) {
+        (void)env.process();
+    }
+    assert(env.is_active());
+
+    // Release when sustain is 0.0
+    env.gate(false);
+    for (int i = 0; i < 2000; ++i) {
+        (void)env.process();
+    }
+    // Must reach Idle without infinite hanging
+    assert(!env.is_active());
+    assert(env.stage() == aether::dsp::EnvelopeStage::Idle);
+    std::cout << "PASSED\n";
+}
+
+void test_hyperbolic_waveguide_boundary_integrity() {
+    std::cout << "[TEST] Hyperbolic Waveguide Boundary Integrity & No SIMD Overrun... ";
+    aether::engines::HyperbolicWaveguide wg;
+    wg.configure(0.45f, 0.003f, 1.0f);
+    wg.strike(aether::Vec2{0.0f, 0.0f}, 0.9f);
+
+    for (int step = 0; step < 500; ++step) {
+        auto frame = wg.step();
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+    }
+
+    const auto& state = wg.state();
+    for (size_t y = 0; y < aether::engines::HyperbolicWaveguide::GRID_DIM; ++y) {
+        for (size_t x = 0; x < aether::engines::HyperbolicWaveguide::GRID_DIM; ++x) {
+            const size_t idx = y * aether::engines::HyperbolicWaveguide::GRID_DIM + x;
+            assert(std::isfinite(state[idx]));
+        }
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_von_karman_stability_high_velocity() {
+    std::cout << "[TEST] Von Karman Large-Deflection Stability with Maximum Excitation... ";
+    aether::engines::VonKarmanPlate plate(48000);
+    plate.init_modes(110.0f, 1.2f, 1.0f);
+    plate.strike(aether::Vec2{0.5f, 0.5f}, 1.0f, 0.005f);
+
+    for (int i = 0; i < 4800; ++i) {
+        auto frame = plate.step();
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+        assert(std::abs(frame.left) <= 1.0f && std::abs(frame.right) <= 1.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_chaotic_oscillator_dc_blocking() {
+    std::cout << "[TEST] Chaotic Oscillator Dual-Channel DC Blocker... ";
+    aether::engines::ChaoticOscillator chaos;
+    chaos.configure(aether::engines::AttractorType::Lorenz, 1.0f);
+
+    float sum_l = 0.0f;
+    float sum_r = 0.0f;
+    const int total_samples = 48000;
+
+    // Warm-up filter
+    for (int i = 0; i < 4000; ++i) {
+        (void)chaos.step(48000.0f);
+    }
+
+    // Accumulate DC component over 1 second
+    for (int i = 0; i < total_samples; ++i) {
+        auto frame = chaos.step(48000.0f);
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+        sum_l += frame.left;
+        sum_r += frame.right;
+    }
+
+    const float dc_l = std::abs(sum_l / total_samples);
+    const float dc_r = std::abs(sum_r / total_samples);
+    assert(dc_l < 0.05f);
+    assert(dc_r < 0.05f);
+    std::cout << "PASSED\n";
+}
+
+void test_biquad_nan_self_healing() {
+    std::cout << "[TEST] Biquad Filter Non-Finite Input Self-Healing... ";
+    aether::dsp::BiquadFilter filter;
+    filter.configure(aether::dsp::FilterType::Lowpass, 1000.0f, 0.707f, 48000.0f);
+
+    // Feed NaNs and Infinities
+    float nan_val = std::numeric_limits<float>::quiet_NaN();
+    float inf_val = std::numeric_limits<float>::infinity();
+    auto out1 = filter.process(nan_val);
+    auto out2 = filter.process(inf_val);
+    assert(std::isfinite(out1) && std::isfinite(out2));
+
+    // Subsequent normal inputs must process without getting stuck on NaN
+    auto out3 = filter.process(0.5f);
+    assert(std::isfinite(out3));
+    std::cout << "PASSED\n";
+}
+
+void test_partitioned_convolution_reset() {
+    std::cout << "[TEST] Partitioned Convolution State Reset... ";
+    aether::dsp::fx::PartitionedConvolution conv;
+    std::vector<float> ir(512, 0.1f);
+    conv.load_impulse_response(ir, 1.0f);
+
+    // Feed audio
+    for (int i = 0; i < 200; ++i) {
+        (void)conv.process(aether::StereoFrame{0.8f, 0.8f});
+    }
+
+    // Reset clears state
+    conv.reset();
+    auto silent_out = conv.process(aether::StereoFrame{0.0f, 0.0f});
+    assert(std::abs(silent_out.left) < 1e-4f);
+    assert(std::abs(silent_out.right) < 1e-4f);
+    std::cout << "PASSED\n";
+}
+
+void test_pseudosphere_horn_extreme_params() {
+    std::cout << "[TEST] Pseudosphere Horn Parameter Robustness... ";
+    aether::engines::PseudosphereHorn::Config cfg;
+    cfg.horn_length_m = -10.0f; // Negative length must be clamped safely
+    cfg.speed_of_sound = -343.0f; // Negative speed of sound
+    cfg.curvature_a = 0.0f;
+    aether::engines::PseudosphereHorn horn(0, cfg); // Sample rate 0
+
+    horn.excite_throat(0.5f);
+    for (int i = 0; i < 100; ++i) {
+        auto frame = horn.step();
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_henon_heiles_boundedness() {
+    std::cout << "[TEST] Henon-Heiles Chaos Long-Term Stability (100k Steps)... ";
+    aether::engines::HenonHeilesOscillator chaos(0.12, 400.0);
+
+    for (int i = 0; i < 100000; ++i) {
+        auto frame = chaos.step(48000.0f);
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+        assert(std::abs(frame.left) <= 1.0f && std::abs(frame.right) <= 1.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (49 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (57 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -1134,6 +1286,14 @@ int main() {
     test_binaural_panner_rear_symmetry();
     test_topological_metamaterial_strike();
     test_pseudosphere_horn_low_sample_rate();
-    std::cout << "\033[1;32mALL 49 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_adsr_envelope_zero_sustain_decay();
+    test_hyperbolic_waveguide_boundary_integrity();
+    test_von_karman_stability_high_velocity();
+    test_chaotic_oscillator_dc_blocking();
+    test_biquad_nan_self_healing();
+    test_partitioned_convolution_reset();
+    test_pseudosphere_horn_extreme_params();
+    test_henon_heiles_boundedness();
+    std::cout << "\033[1;32mALL 57 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

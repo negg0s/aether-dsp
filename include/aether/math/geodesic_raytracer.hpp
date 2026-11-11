@@ -82,6 +82,13 @@ public:
      * @brief Trace an ensemble of sound rays from a source to a receiver.
      */
     std::vector<RayArrival> trace(const Vec2& source, const Vec2& receiver) {
+        config_.num_rays = std::clamp(config_.num_rays, 1, 1024);
+        config_.step_dt = std::clamp(config_.step_dt, 0.00005f, 0.05f);
+        config_.max_time = std::clamp(config_.max_time, 0.01f, 5.0f);
+        config_.speed_of_sound = std::clamp(config_.speed_of_sound, 10.0f, 2000.0f);
+        config_.boundary_radius = std::clamp(config_.boundary_radius, 0.1f, 0.98f);
+        config_.capture_radius = std::clamp(config_.capture_radius, 0.005f, 0.5f);
+
         std::vector<RayArrival> arrivals;
         std::vector<GeodesicRay> rays(config_.num_rays);
 

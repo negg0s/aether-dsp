@@ -32,7 +32,7 @@ public:
     };
 
     explicit VonKarmanPlate(uint32_t sample_rate = 48000)
-        : sample_rate_(sample_rate), dt_(1.0f / sample_rate) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)), dt_(1.0f / static_cast<float>(std::clamp(sample_rate, 1000u, 384000u))) {
         init_modes(110.0f, 1.2f, 0.6f);
     }
 
@@ -96,36 +96,48 @@ public:
     }
 
     /**
-     * @brief Advance physical plate dynamics by one sample frame using Symplectic Velocity-Verlet.
+     * @brief Advance physical plate dynamics by one sample frame using Symplectic Velocity-Verlet with 2x substepping.
      */
     StereoFrame step() noexcept {
-        float out_l = 0.0f;
-        float out_r = 0.0f;
-
         const size_t num_modes = modes_.size();
+        const float dt_sub = dt_ * 0.5f;
 
-        float low_mode_energy = 0.0f;
-        for (size_t i = 0; i < std::min<size_t>(6, num_modes); ++i) {
-            low_mode_energy += modes_[i].q * modes_[i].q;
-        }
-
-        for (size_t i = 0; i < num_modes; ++i) {
-            auto& m = modes_[i];
-            const float omega = m.frequency * (2.0f * std::numbers::pi_v<float>);
-
-            const float q2 = m.q * m.q;
-            const float f_duffing = m.beta * q2 * m.q;
-
-            float f_cascade = 0.0f;
-            if (i > 6 && nonlinearity_ > 0.01f) {
-                f_cascade = m.coupling * low_mode_energy * m.q;
+        for (int sub = 0; sub < 2; ++sub) {
+            float low_mode_energy = 0.0f;
+            for (size_t i = 0; i < std::min<size_t>(6, num_modes); ++i) {
+                low_mode_energy += modes_[i].q * modes_[i].q;
             }
 
-            const float accel = -(omega * omega) * m.q - 2.0f * m.damping * omega * m.v - f_duffing - f_cascade;
+            for (size_t i = 0; i < num_modes; ++i) {
+                auto& m = modes_[i];
+                const float omega = m.frequency * (2.0f * std::numbers::pi_v<float>);
 
-            m.v += accel * dt_;
-            m.q += m.v * dt_;
+                const float q2 = m.q * m.q;
+                const float f_duffing = m.beta * q2 * m.q;
 
+                float f_cascade = 0.0f;
+                if (i > 6 && nonlinearity_ > 0.01f) {
+                    f_cascade = m.coupling * low_mode_energy * m.q;
+                }
+
+                const float accel = -(omega * omega) * m.q - 2.0f * m.damping * omega * m.v - f_duffing - f_cascade;
+
+                m.v += std::clamp(accel, -200000.0f, 200000.0f) * dt_sub;
+                m.v = std::clamp(m.v, -500.0f, 500.0f);
+                m.q += m.v * dt_sub;
+                m.q = std::clamp(m.q, -10.0f, 10.0f);
+
+                if (!std::isfinite(m.q) || !std::isfinite(m.v)) {
+                    m.q = 0.0f;
+                    m.v = 0.0f;
+                }
+            }
+        }
+
+        float out_l = 0.0f;
+        float out_r = 0.0f;
+        for (size_t i = 0; i < num_modes; ++i) {
+            const auto& m = modes_[i];
             const float phi_l = std::sin(m.m * std::numbers::pi_v<float> * 0.3f) * std::sin(m.n * std::numbers::pi_v<float> * 0.65f);
             const float phi_r = std::sin(m.m * std::numbers::pi_v<float> * 0.7f) * std::sin(m.n * std::numbers::pi_v<float> * 0.35f);
 

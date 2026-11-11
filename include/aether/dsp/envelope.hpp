@@ -22,12 +22,15 @@ public:
     constexpr ADSREnvelope() noexcept = default;
 
     void configure(float attack_sec, float decay_sec, float sustain_level, float release_sec, float sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE)) noexcept {
-        sample_rate_ = sample_rate;
+        sample_rate_ = std::clamp(sample_rate, 1000.0f, 384000.0f);
         sustain_level_ = std::clamp(sustain_level, 0.0f, 1.0f);
+        attack_sec_ = std::max(0.0001f, attack_sec);
+        decay_sec_ = std::max(0.0001f, decay_sec);
+        release_sec_ = std::max(0.0001f, release_sec);
 
-        attack_rate_ = calculate_rate(attack_sec, 0.0f, 1.0f);
-        decay_rate_ = calculate_rate(decay_sec, 1.0f, sustain_level_);
-        release_rate_ = calculate_rate(release_sec, sustain_level_, 0.0f);
+        attack_rate_ = calculate_rate(attack_sec_, 0.0f, 1.0f);
+        decay_rate_ = calculate_rate(decay_sec_, 1.0f, sustain_level_);
+        release_rate_ = calculate_rate(release_sec_, std::max(0.01f, sustain_level_), 0.0f);
     }
 
     void gate(bool on) noexcept {
@@ -35,6 +38,12 @@ public:
             stage_ = EnvelopeStage::Attack;
         } else if (stage_ != EnvelopeStage::Idle) {
             stage_ = EnvelopeStage::Release;
+            const float samples = release_sec_ * sample_rate_;
+            release_rate_ = (samples > 0.0f) ? (value_ / samples) : value_;
+            if (release_rate_ <= 0.0f) {
+                stage_ = EnvelopeStage::Idle;
+                value_ = 0.0f;
+            }
         }
     }
 
@@ -93,6 +102,9 @@ private:
     EnvelopeStage stage_{EnvelopeStage::Idle};
     float value_{0.0f};
     float sustain_level_{0.7f};
+    float attack_sec_{0.005f};
+    float decay_sec_{0.8f};
+    float release_sec_{1.2f};
     float attack_rate_{0.01f};
     float decay_rate_{0.005f};
     float release_rate_{0.001f};

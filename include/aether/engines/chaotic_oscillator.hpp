@@ -28,7 +28,10 @@ public:
 
     constexpr void reset() noexcept {
         state_ = {0.1f, 0.0f, 0.0f};
-        prev_sample_ = 0.0f;
+        prev_in_l_ = 0.0f;
+        prev_out_l_ = 0.0f;
+        prev_in_r_ = 0.0f;
+        prev_out_r_ = 0.0f;
     }
 
     void configure(AttractorType type, float speed = 1.0f, float parameter_a = -1.4f, float parameter_b = 1.6f) noexcept {
@@ -39,6 +42,7 @@ public:
     }
 
     [[nodiscard]] StereoFrame step(float sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE)) noexcept {
+        sample_rate = std::clamp(sample_rate, 1000.0f, 384000.0f);
         const float dt = (speed_ * 440.0f) / sample_rate;
 
         switch (type_) {
@@ -103,10 +107,15 @@ public:
             right = std::clamp(state_.y / 2.0f, -1.0f, 1.0f);
         }
 
-        // High-pass DC offset blocker
-        left = left - prev_sample_ + 0.995f * dc_blocker_l_;
-        dc_blocker_l_ = left;
-        prev_sample_ = left;
+        // High-pass DC offset blocker for both channels (y[n] = x[n] - x[n-1] + R * y[n-1])
+        const float raw_l = left;
+        const float raw_r = right;
+        left = raw_l - prev_in_l_ + 0.995f * prev_out_l_;
+        right = raw_r - prev_in_r_ + 0.995f * prev_out_r_;
+        prev_in_l_ = raw_l;
+        prev_out_l_ = left;
+        prev_in_r_ = raw_r;
+        prev_out_r_ = right;
 
         return {left, right};
     }
@@ -123,8 +132,10 @@ private:
     float param_b_{1.6f};
     float param_c_{1.0f};
     float param_d_{0.7f};
-    float prev_sample_{0.0f};
-    float dc_blocker_l_{0.0f};
+    float prev_in_l_{0.0f};
+    float prev_out_l_{0.0f};
+    float prev_in_r_{0.0f};
+    float prev_out_r_{0.0f};
 };
 
 } // namespace aether::engines

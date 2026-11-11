@@ -58,8 +58,9 @@ public:
         for (size_t i = 0; i < NUM_LINES; ++i) {
             feedback[i] = (outputs[i] - factor) * decay_;
 
-            // Low-pass dampening filter in feedback loop
+            // Low-pass dampening filter in feedback loop with denormal flushing
             damp_filters_[i] += damping_ * (feedback[i] - damp_filters_[i]);
+            if (std::abs(damp_filters_[i]) < 1e-15f) damp_filters_[i] = 0.0f;
             feedback[i] = damp_filters_[i];
         }
 
@@ -67,7 +68,8 @@ public:
         const float mono_in = (input.left + input.right) * 0.5f;
 
         for (size_t i = 0; i < NUM_LINES; ++i) {
-            const float to_write = mono_in + feedback[i];
+            float to_write = mono_in + feedback[i];
+            if (std::abs(to_write) < 1e-15f) to_write = 0.0f;
             delay_buffers_[i][write_indices_[i]] = to_write;
 
             write_indices_[i]++;

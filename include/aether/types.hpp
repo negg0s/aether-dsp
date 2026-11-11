@@ -71,7 +71,8 @@ struct Vec2 {
     }
 
     [[nodiscard]] constexpr Vec2 operator/(float scalar) const noexcept {
-        return {x / scalar, y / scalar};
+        const float inv = std::abs(scalar) > 1e-12f ? (1.0f / scalar) : 0.0f;
+        return {x * inv, y * inv};
     }
 };
 
@@ -117,8 +118,29 @@ struct StereoFrame {
         return {left + o.left, right + o.right};
     }
 
+    constexpr StereoFrame operator-(const StereoFrame& o) const noexcept {
+        return {left - o.left, right - o.right};
+    }
+
     constexpr StereoFrame operator*(float s) const noexcept {
         return {left * s, right * s};
+    }
+
+    constexpr StereoFrame operator/(float s) const noexcept {
+        const float inv = std::abs(s) > 1e-12f ? (1.0f / s) : 0.0f;
+        return {left * inv, right * inv};
+    }
+
+    constexpr StereoFrame& operator+=(const StereoFrame& o) noexcept {
+        left += o.left;
+        right += o.right;
+        return *this;
+    }
+
+    constexpr StereoFrame& operator-=(const StereoFrame& o) noexcept {
+        left -= o.left;
+        right -= o.right;
+        return *this;
     }
 };
 

@@ -148,6 +148,20 @@ public:
         }
     }
 
+    /**
+     * @brief Reset internal delay buffers and frequency-domain history.
+     */
+    void reset() noexcept {
+        head_history_.fill(0.0f);
+        head_cursor_ = 0;
+        time_input_buffer_.fill(0.0f);
+        current_input_block_.fill(0.0f);
+        tail_output_fifo_.fill(0.0f);
+        std::fill(input_history_.begin(), input_history_.end(), Complex(0.0f, 0.0f));
+        history_head_ = 0;
+        fifo_read_idx_ = BLOCK_SIZE;
+    }
+
     [[nodiscard]] size_t num_partitions() const noexcept { return num_partitions_; }
     [[nodiscard]] float wet_gain() const noexcept { return wet_gain_; }
 

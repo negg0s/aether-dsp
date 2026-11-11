@@ -37,12 +37,21 @@ public:
         : PseudosphereHorn(sample_rate, Config{}) {}
 
     PseudosphereHorn(uint32_t sample_rate, Config cfg)
-        : sample_rate_(sample_rate), dt_(1.0f / sample_rate), config_(cfg) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)),
+          dt_(1.0f / static_cast<float>(std::clamp(sample_rate, 1000u, 384000u))),
+          config_(cfg) {
         init_geometry();
     }
 
     void init_geometry() {
-        dz_ = config_.horn_length_m / (NUM_CELLS - 1);
+        config_.horn_length_m = std::clamp(config_.horn_length_m, 0.05f, 5.0f);
+        config_.curvature_a = std::clamp(config_.curvature_a, 0.01f, 2.0f);
+        config_.throat_radius_m = std::clamp(config_.throat_radius_m, 0.001f, 0.5f);
+        config_.bell_radius_m = std::clamp(config_.bell_radius_m, config_.throat_radius_m + 0.001f, 2.0f);
+        config_.speed_of_sound = std::clamp(config_.speed_of_sound, 50.0f, 1500.0f);
+        config_.damping = std::clamp(config_.damping, 0.0f, 0.5f);
+
+        dz_ = config_.horn_length_m / static_cast<float>(NUM_CELLS - 1);
         c_ = config_.speed_of_sound;
         const float raw_courant = (c_ * dt_) / dz_;
         substeps_ = static_cast<size_t>(std::ceil(raw_courant / 0.70f));
@@ -59,7 +68,7 @@ public:
             const float u = (config_.horn_length_m - z) / config_.curvature_a;
             const float sech_u = 1.0f / std::cosh(std::clamp(u, 0.0f, 6.0f));
             const float r = config_.throat_radius_m + (config_.bell_radius_m - config_.throat_radius_m) * sech_u;
-            area_[i] = std::numbers::pi_v<float> * r * r;
+            area_[i] = std::max(1e-7f, std::numbers::pi_v<float> * r * r);
         }
 
         bell_radiation_state_ = 0.0f;
@@ -96,7 +105,7 @@ public:
      */
     StereoFrame step() noexcept {
         const float r2 = courant_ * courant_;
-        const float gamma = 1.0f - (config_.damping / static_cast<float>(substeps_));
+        const float gamma = std::clamp(1.0f - (config_.damping / static_cast<float>(substeps_)), 0.0f, 1.0f);
 
         for (size_t sub = 0; sub < substeps_; ++sub) {
             // Interior Webster horn finite-difference update:

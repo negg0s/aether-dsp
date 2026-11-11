@@ -103,7 +103,8 @@ public:
         for (size_t y = 1; y < GRID_DIM - 1; ++y) {
             const size_t row_offset = y * GRID_DIM;
 
-            for (size_t x = 1; x < GRID_DIM - 1; x += 8) {
+            // Vectorized chunks of 8 (x = 1..8, 9..16, 17..24)
+            for (size_t x = 1; x <= 17; x += 8) {
                 const size_t idx = row_offset + x;
 
                 // Load 8 contiguous cells
@@ -136,6 +137,24 @@ public:
                 u_new = _mm256_mul_ps(u_new, pml);
 
                 _mm256_storeu_ps(&u_next_[idx], u_new);
+            }
+
+            // Scalar tail for remainder interior cells (x = 25..30)
+            for (size_t x = 25; x < GRID_DIM - 1; ++x) {
+                const size_t idx = row_offset + x;
+                if (!is_inside_disk_[idx]) continue;
+
+                const float u_c = u_curr_[idx];
+                const float laplacian_e = u_curr_[idx + 1] + u_curr_[idx - 1] +
+                                          u_curr_[idx + GRID_DIM] + u_curr_[idx - GRID_DIM] -
+                                          4.0f * u_c;
+                const float lb_metric = laplace_beltrami_factors_[idx];
+                const float laplacian_h = laplacian_e * lb_metric * curvature_scale_;
+
+                float u_new = inv_denom * (2.0f * u_c - prev_factor * u_prev_[idx] + c2 * laplacian_h);
+                u_new *= boundary_absorption_[idx];
+
+                u_next_[idx] = u_new;
             }
         }
 #else

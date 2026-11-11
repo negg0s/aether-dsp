@@ -29,7 +29,7 @@ public:
     static constexpr size_t LATTICE_SIZE = 64;
 
     explicit KdvSolitonLattice(uint32_t sample_rate = DEFAULT_SAMPLE_RATE) noexcept
-        : sample_rate_(sample_rate) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)) {
         reset();
     }
 
@@ -135,7 +135,8 @@ public:
         for (size_t i = 1; i < LATTICE_SIZE - 1; ++i) {
             e_kin += 0.5f * p_[i] * p_[i];
             const float r = q_[i + 1] - q_[i];
-            e_pot += (a_ / b_) * (std::exp(-b_ * r) - 1.0f + b_ * r);
+            const float exp_term = std::exp(std::clamp(-b_ * r, -20.0f, 20.0f));
+            e_pot += (a_ / b_) * (exp_term - 1.0f + b_ * r);
         }
         return e_kin + e_pot;
     }

@@ -60,6 +60,7 @@ public:
      * @brief Step the 4D Hamiltonian system by dt using 4th-Order Symplectic Yoshida integration.
      */
     StereoFrame step(float sample_rate) noexcept {
+        sample_rate = std::clamp(sample_rate, 1000.0f, 384000.0f);
         const double dt = (1.0 / static_cast<double>(sample_rate)) * time_scale_;
 
         // Yoshida 4th-order integration steps for 2 coupled dimensions (x, y)
@@ -80,11 +81,15 @@ public:
         step_yoshida(Yoshida4thIntegrator::C3, Yoshida4thIntegrator::D3);
         step_yoshida(Yoshida4thIntegrator::C4, 0.0);
 
-        // Bounded reflection if approaching escape trajectory
+        // Bounded reflection and escape trajectory protection
         const double r2 = state_.x * state_.x + state_.y * state_.y;
-        if (r2 > 0.95) {
-            state_.px = -state_.px * 0.95;
-            state_.py = -state_.py * 0.95;
+        if (!std::isfinite(state_.x) || !std::isfinite(state_.y) || r2 > 1.4) {
+            reset(energy_);
+        } else if (r2 > 0.95) {
+            state_.px = -state_.px * 0.90;
+            state_.py = -state_.py * 0.90;
+            state_.x *= 0.96;
+            state_.y *= 0.96;
         }
 
         const float out_l = static_cast<float>(std::tanh(state_.x * 2.2));

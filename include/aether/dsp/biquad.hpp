@@ -93,10 +93,15 @@ public:
     }
 
     [[nodiscard]] inline Sample process(Sample in) noexcept {
+        if (!std::isfinite(in)) in = 0.0f;
         // Direct Form II Transposed execution
         const Sample out = b0_ * in + s1_;
         s1_ = b1_ * in - a1_ * out + s2_;
         s2_ = b2_ * in - a2_ * out;
+        if (!std::isfinite(s1_) || !std::isfinite(s2_)) {
+            reset();
+            return 0.0f;
+        }
         if (std::abs(s1_) < 1e-15f) s1_ = 0.0f;
         if (std::abs(s2_) < 1e-15f) s2_ = 0.0f;
         return out;

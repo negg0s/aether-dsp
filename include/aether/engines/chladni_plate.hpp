@@ -44,7 +44,7 @@ public:
      * @param sample_rate Audio sample rate
      */
     void configure(float fundamental_freq, float stiffness = 1.0f, float sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE)) noexcept {
-        sample_rate_ = sample_rate;
+        sample_rate_ = std::clamp(sample_rate, 1000.0f, 384000.0f);
         init_modes(fundamental_freq, stiffness);
     }
 
@@ -154,7 +154,8 @@ private:
                 mode.frequency = fundamental_freq * std::pow(m2n2 / 5.0f, 0.95f * stiffness);
 
                 // Higher modes decay faster (air damping + internal thermoelastic friction)
-                mode.decay_rate = 0.00015f * (1.0f + 0.08f * m2n2);
+                const float rate_scale = 48000.0f / sample_rate_;
+                mode.decay_rate = std::clamp(0.00015f * (1.0f + 0.08f * m2n2) * rate_scale, 0.00001f, 0.5f);
                 mode.amplitude = 0.0f;
                 mode.phase = 0.0f;
 

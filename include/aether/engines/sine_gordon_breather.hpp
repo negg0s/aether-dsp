@@ -27,7 +27,7 @@ public:
     static constexpr size_t GRID_SIZE = 128;
 
     explicit SineGordonBreather(uint32_t sample_rate = DEFAULT_SAMPLE_RATE) noexcept
-        : sample_rate_(sample_rate) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)) {
         reset();
     }
 
@@ -84,9 +84,9 @@ public:
 
         for (size_t i = 0; i < GRID_SIZE; ++i) {
             const float x = static_cast<float>(i) - center;
-            // Superposition of Kink at -d and Antikink at +d
-            const float arg_kink = gamma * (x + d) * 0.12f;
-            const float arg_antikink = gamma * (x - d) * 0.12f;
+            // Superposition of Kink at -d and Antikink at +d (bounded to avoid exp float overflow)
+            const float arg_kink = std::clamp(gamma * (x + d) * 0.12f, -60.0f, 60.0f);
+            const float arg_antikink = std::clamp(gamma * (x - d) * 0.12f, -60.0f, 60.0f);
             const float phi_k = 4.0f * std::atan(std::exp(arg_kink));
             const float phi_ak = 4.0f * std::atan(std::exp(-arg_antikink));
             phi_[i] = (phi_k - phi_ak);
@@ -128,7 +128,8 @@ public:
             const float laplacian = phi_[i + 1] - 2.0f * phi_[i] + phi_[i - 1];
             const float nonlinear_force = -std::sin(phi_[i]) * dt2_omega0_sq;
             const float acc = c2 * laplacian + nonlinear_force;
-            phi_next_[i] = ((2.0f - damping_) * phi_[i] - phi_prev_[i] + acc) * damp_factor;
+            const float updated = ((2.0f - damping_) * phi_[i] - phi_prev_[i] + acc) * damp_factor;
+            phi_next_[i] = std::isfinite(updated) ? std::clamp(updated, -100.0f, 100.0f) : 0.0f;
         }
 
         constexpr size_t PICKUP_L = static_cast<size_t>(GRID_SIZE * 0.38f);
