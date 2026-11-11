@@ -154,7 +154,7 @@ private:
         while (self->command_queue_.pop(cmd)) {
             switch (cmd.type) {
                 case CommandType::LoadPreset:
-                    self->engine_.load_preset(static_cast<Preset>(cmd.param_int));
+                    self->engine_.load_preset(static_cast<Preset>(std::clamp(cmd.param_int, 0, 13)));
                     break;
                 case CommandType::NoteOn:
                     self->engine_.note_on({cmd.param_f1, cmd.param_f2}, cmd.param_f3);

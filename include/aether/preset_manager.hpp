@@ -90,6 +90,7 @@ public:
         data.curvature_scale = std::clamp(data.curvature_scale, 0.01f, 10.0f);
         data.plate_fundamental = std::clamp(data.plate_fundamental, 10.0f, 10000.0f);
         data.plate_stiffness = std::clamp(data.plate_stiffness, 0.01f, 100.0f);
+        data.preset_id = std::clamp(data.preset_id, 0, 1000);
         data.reverb_decay = std::clamp(data.reverb_decay, 0.0f, 0.999f);
         data.reverb_mix = std::clamp(data.reverb_mix, 0.0f, 1.0f);
 

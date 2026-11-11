@@ -192,6 +192,8 @@ public:
     std::vector<StereoFrame> synthesize_impulse_response(const std::vector<RayArrival>& arrivals,
                                                         uint32_t sample_rate,
                                                         float total_duration = 1.0f) const {
+        sample_rate = std::clamp(sample_rate, 1000u, 384000u);
+        total_duration = std::clamp(total_duration, 0.01f, 10.0f);
         const size_t total_samples = static_cast<size_t>(total_duration * sample_rate);
         std::vector<StereoFrame> ir(total_samples, StereoFrame{0.0f, 0.0f});
 

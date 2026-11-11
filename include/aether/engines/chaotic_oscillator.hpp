@@ -112,12 +112,20 @@ public:
         const float raw_r = right;
         left = raw_l - prev_in_l_ + 0.995f * prev_out_l_;
         right = raw_r - prev_in_r_ + 0.995f * prev_out_r_;
+
+        // Self-heal numerical breakdown in state and filter registers
+        if (!std::isfinite(left) || !std::isfinite(right)) {
+            reset();
+            left = 0.0f;
+            right = 0.0f;
+        }
+
         prev_in_l_ = raw_l;
         prev_out_l_ = left;
         prev_in_r_ = raw_r;
         prev_out_r_ = right;
 
-        return {left, right};
+        return {std::clamp(left, -1.0f, 1.0f), std::clamp(right, -1.0f, 1.0f)};
     }
 
     [[nodiscard]] Vec3 state() const noexcept {

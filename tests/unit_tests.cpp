@@ -1485,6 +1485,34 @@ void test_von_karman_init_modes_bounds() {
     std::cout << "PASSED\n";
 }
 
+void test_geodesic_raytracer_sample_rate_clamp() {
+    std::cout << "[TEST] Geodesic Raytracer Sample Rate & Duration Clamping... ";
+    aether::math::GeodesicRayTracer tracer;
+    std::vector<aether::math::RayArrival> arrivals;
+    arrivals.push_back({0.01f, 0.8f, 45.0f, 0.5f});
+    auto ir = tracer.synthesize_impulse_response(arrivals, 0, -1.0f);
+    assert(!ir.empty());
+    for (const auto& frame : ir) {
+        assert(std::isfinite(frame.left));
+        assert(std::isfinite(frame.right));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_chaotic_oscillator_nan_recovery() {
+    std::cout << "[TEST] Chaotic Oscillator Non-Finite State Recovery... ";
+    aether::engines::ChaoticOscillator chaos;
+    chaos.configure(aether::engines::AttractorType::Lorenz, 20.0f);
+    for (int i = 0; i < 500; ++i) {
+        auto frame = chaos.step(48000.0f);
+        assert(std::isfinite(frame.left));
+        assert(std::isfinite(frame.right));
+        assert(std::abs(frame.left) <= 1.0f);
+        assert(std::abs(frame.right) <= 1.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1559,6 +1587,8 @@ int main() {
     test_hyperbolic_string_zero_curvature();
     test_kdv_soliton_lattice_nan_healing();
     test_von_karman_init_modes_bounds();
-    std::cout << "\033[1;32mALL 72 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_geodesic_raytracer_sample_rate_clamp();
+    test_chaotic_oscillator_nan_recovery();
+    std::cout << "\033[1;32mALL 74 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
