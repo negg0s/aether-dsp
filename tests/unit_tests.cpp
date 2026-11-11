@@ -1439,6 +1439,52 @@ void test_wav_writer_oversized_guard() {
     std::cout << "PASSED\n";
 }
 
+void test_hyperbolic_string_zero_curvature() {
+    std::cout << "[TEST] Hyperbolic String Zero Curvature Clamping... ";
+    aether::engines::HyperbolicString::Config cfg;
+    cfg.jawari_curvature = 0.0f;
+    cfg.length_m = -1.0f;
+    aether::engines::HyperbolicString string(0, cfg);
+    assert(string.state().size() == aether::engines::HyperbolicString::NUM_POINTS);
+    for (float val : string.jawari_profile()) {
+        assert(std::isfinite(val));
+    }
+    string.pluck(0.5f, 0.8f);
+    for (int i = 0; i < 64; ++i) {
+        auto frame = string.step();
+        assert(std::isfinite(frame.left));
+        assert(std::isfinite(frame.right));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_kdv_soliton_lattice_nan_healing() {
+    std::cout << "[TEST] KdV Soliton Lattice Non-Finite Self-Healing... ";
+    aether::engines::KdvSolitonLattice lattice(48000);
+    lattice.strike(0.5f, 10.0f);
+    for (int i = 0; i < 200; ++i) {
+        auto frame = lattice.process();
+        assert(std::isfinite(frame.left));
+        assert(std::isfinite(frame.right));
+        assert(std::abs(frame.left) <= 1.0f);
+        assert(std::abs(frame.right) <= 1.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_von_karman_init_modes_bounds() {
+    std::cout << "[TEST] Von Karman Plate Extreme Mode Initialization... ";
+    aether::engines::VonKarmanPlate plate(48000);
+    plate.init_modes(0.0f, -5.0f, -10.0f);
+    plate.strike({0.5f, 0.5f}, 0.9f);
+    for (int i = 0; i < 64; ++i) {
+        auto frame = plate.step();
+        assert(std::isfinite(frame.left));
+        assert(std::isfinite(frame.right));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1510,6 +1556,9 @@ int main() {
     test_hyperbolic_tiling_bounds();
     test_poincare_disk_nan_resilience();
     test_wav_writer_oversized_guard();
-    std::cout << "\033[1;32mALL 69 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_hyperbolic_string_zero_curvature();
+    test_kdv_soliton_lattice_nan_healing();
+    test_von_karman_init_modes_bounds();
+    std::cout << "\033[1;32mALL 72 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

@@ -43,7 +43,12 @@ public:
         : HyperbolicString(sample_rate, Config{}) {}
 
     HyperbolicString(uint32_t sample_rate, Config cfg)
-        : sample_rate_(sample_rate), dt_(1.0f / sample_rate), config_(cfg) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)),
+          dt_(1.0f / static_cast<float>(std::clamp(sample_rate, 1000u, 384000u))),
+          config_(cfg) {
+        config_.length_m = std::clamp(config_.length_m, 0.05f, 10.0f);
+        config_.jawari_curvature = std::max(0.001f, config_.jawari_curvature);
+        config_.fundamental_hz = std::clamp(config_.fundamental_hz, 30.0f, 1200.0f);
         init_grid();
     }
 

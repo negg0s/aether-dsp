@@ -116,6 +116,15 @@ public:
         constexpr size_t PICKUP_L = static_cast<size_t>(LATTICE_SIZE * 0.30f);
         constexpr size_t PICKUP_R = static_cast<size_t>(LATTICE_SIZE * 0.70f);
 
+        // Self-heal numerical NaN/Inf breakdown during extreme non-linear shocks
+        for (size_t i = 0; i < LATTICE_SIZE; ++i) {
+            if (!std::isfinite(q_[i]) || !std::isfinite(p_[i])) {
+                q_[i] = 0.0f;
+                p_[i] = 0.0f;
+                f_[i] = 0.0f;
+            }
+        }
+
         const float strain_l = (q_[PICKUP_L + 1] - q_[PICKUP_L]) * 1.8f;
         const float strain_r = (q_[PICKUP_R + 1] - q_[PICKUP_R]) * 1.8f;
 

@@ -249,7 +249,7 @@ public:
      */
     void note_on_degree(int degree, float velocity = 0.85f, Vec2 strike_coord = {0.3f, 0.4f}) noexcept {
         const float freq = tuning_.get_frequency(degree, 220.0f);
-        if (current_preset_ == Preset::ChladniPlateGong) {
+        if (current_preset_ == Preset::ChladniPlateGong || current_preset_ == Preset::BowedCrystalPlate) {
             chladni_.configure(freq, 1.15f, static_cast<float>(sample_rate_));
         } else if (current_preset_ == Preset::VonKarmanTurbulentGong) {
             von_karman_.init_modes(freq * 0.5f, 1.2f, 0.7f);
@@ -260,6 +260,8 @@ public:
             sine_gordon_.inject_breather(0.5f, 0.72f, 1.0f);
         } else if (current_preset_ == Preset::KdvSolitonLattice) {
             soliton_lattice_.configure(1.8f, freq * 1.5f, 0.0004f);
+        } else if (current_preset_ == Preset::HenonHeilesChaos) {
+            henon_heiles_.set_time_scale(std::clamp(static_cast<double>(freq) * 1.5, 50.0, 1500.0));
         }
         note_on(strike_coord, velocity);
     }

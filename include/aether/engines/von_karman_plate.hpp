@@ -43,8 +43,8 @@ public:
      * @param nonlinearity Strength of von Kármán nonlinear modal coupling [0.0 = linear, 1.0 = heavy gong]
      */
     void init_modes(float fundamental, float stiffness = 1.0f, float nonlinearity = 0.5f) {
-        fundamental_ = fundamental;
-        stiffness_ = stiffness;
+        fundamental_ = std::clamp(fundamental, 20.0f, 10000.0f);
+        stiffness_ = std::clamp(stiffness, 0.05f, 20.0f);
         nonlinearity_ = std::clamp(nonlinearity, 0.0f, 2.0f);
         modes_.clear();
 

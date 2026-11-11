@@ -82,8 +82,15 @@ def analyze_wav(filename: str):
     # Hann window
     windowed = [samples[i] * 0.5 * (1.0 - math.cos(2.0 * math.pi * i / (N - 1))) for i in range(N)]
 
+    if framerate <= 0:
+        print('[ERROR] Invalid framerate.')
+        return
+
     # Compute DFT magnitudes for first 512 frequency bins
     bin_width = framerate / N
+    if bin_width <= 0:
+        print('[ERROR] Invalid bin width.')
+        return
     magnitudes = []
     for k in range(N // 4):
         omega = 2.0 * math.pi * k / N
