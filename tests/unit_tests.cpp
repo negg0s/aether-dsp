@@ -1513,6 +1513,32 @@ void test_chaotic_oscillator_nan_recovery() {
     std::cout << "PASSED\n";
 }
 
+void test_tuning_scale_sanitization() {
+    std::cout << "[TEST] Microtonal Tuning Scale Sanitization... ";
+    aether::dsp::TuningSystem tuning;
+    tuning.load_scale(0.0, {0.0, -1.0, std::numeric_limits<double>::quiet_NaN(), 1.5});
+    assert(tuning.size() == 4);
+    for (int deg = -10; deg <= 10; ++deg) {
+        float f = tuning.get_frequency(deg, 440.0f);
+        assert(std::isfinite(f));
+        assert(f > 0.0f);
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_polyphony_clamping() {
+    std::cout << "[TEST] PolyVoice Frequency & Velocity Clamping... ";
+    aether::PolyphonyManager<4> mgr(48000);
+    mgr.note_on(60, -100.0f, -5.0f);
+    mgr.note_on(64, 1e8f, 10.0f);
+    for (int i = 0; i < 64; ++i) {
+        auto frame = mgr.step();
+        assert(std::isfinite(frame.left));
+        assert(std::isfinite(frame.right));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1589,6 +1615,8 @@ int main() {
     test_von_karman_init_modes_bounds();
     test_geodesic_raytracer_sample_rate_clamp();
     test_chaotic_oscillator_nan_recovery();
-    std::cout << "\033[1;32mALL 74 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_tuning_scale_sanitization();
+    test_polyphony_clamping();
+    std::cout << "\033[1;32mALL 76 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

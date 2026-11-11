@@ -32,6 +32,8 @@ struct PolyVoice {
         age = current_age;
         active = true;
 
+        frequency = std::clamp(frequency, 20.0f, 15000.0f);
+        velocity = std::clamp(velocity, 0.0f, 1.0f);
         resonator.configure(frequency, 1.15f, sample_rate);
         resonator.strike({0.35f, 0.40f}, velocity);
 

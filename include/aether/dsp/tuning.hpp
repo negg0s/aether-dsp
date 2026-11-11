@@ -168,8 +168,13 @@ public:
     }
 
     void load_scale(double period, std::vector<double> ratios, std::string description = "") {
-        period_ratio_ = period > 0.0 ? period : 2.0;
+        period_ratio_ = (std::isfinite(period) && period > 1.0001) ? std::min(period, 100.0) : 2.0;
         if (ratios.empty()) ratios = {1.0};
+        for (auto& r : ratios) {
+            if (!std::isfinite(r) || r <= 0.0) {
+                r = 1.0;
+            }
+        }
         ratios_ = std::move(ratios);
         description_ = std::move(description);
     }
