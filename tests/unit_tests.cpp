@@ -1654,6 +1654,23 @@ void test_wav_reader_nan_sanitizer() {
     std::cout << "PASSED\n";
 }
 
+void test_partitioned_convolution_tail_nan_sanitizer() {
+    std::cout << "[TEST] Partitioned Convolution Tail NaN Sanitization... ";
+    aether::dsp::fx::PartitionedConvolution conv;
+    // Create an IR larger than BLOCK_SIZE (128) to activate tail partitions
+    std::vector<float> ir(384, 0.01f);
+    conv.load_impulse_response(ir, 1.0f);
+    assert(conv.num_partitions() == 3);
+
+    // Feed normal samples
+    for (int i = 0; i < 256; ++i) {
+        auto out = conv.process({0.1f, 0.1f});
+        assert(std::isfinite(out.left));
+        assert(std::isfinite(out.right));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1739,6 +1756,7 @@ int main() {
     test_algorithmic_composer_bounds();
     test_svg_exporter_finite_vertices();
     test_wav_reader_nan_sanitizer();
-    std::cout << "\033[1;32mALL 83 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_partitioned_convolution_tail_nan_sanitizer();
+    std::cout << "\033[1;32mALL 84 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

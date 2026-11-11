@@ -215,7 +215,8 @@ private:
 
         // Overlap-save: discard the first BLOCK_SIZE samples, save second BLOCK_SIZE samples
         for (size_t i = 0; i < BLOCK_SIZE; ++i) {
-            tail_output_fifo_[i] = y_accum_[i + BLOCK_SIZE].real();
+            float val = y_accum_[i + BLOCK_SIZE].real();
+            tail_output_fifo_[i] = std::isfinite(val) ? val : 0.0f;
         }
 
         current_input_block_.fill(0.0f);
