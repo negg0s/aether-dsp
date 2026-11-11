@@ -39,7 +39,7 @@ public:
     };
 
     explicit HyperbolicSpatializer3D(uint32_t sample_rate = 48000)
-        : sample_rate_(sample_rate), dt_(1.0f / sample_rate) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)), dt_(1.0f / static_cast<float>(std::clamp(sample_rate, 1000u, 384000u))) {
         // Initialize head shadow lowpass filters
         filter_l_.configure(FilterType::Lowpass, 14000.0f, 0.707f, static_cast<float>(sample_rate_));
         filter_r_.configure(FilterType::Lowpass, 14000.0f, 0.707f, static_cast<float>(sample_rate_));
@@ -163,12 +163,13 @@ private:
 
     [[nodiscard]] float read_interpolated(const std::vector<float>& buf, float delay_smp) const noexcept {
         const float read_pos = static_cast<float>(write_idx_) - delay_smp;
-        float idx_f = read_pos;
-        while (idx_f < 0.0f) idx_f += static_cast<float>(MAX_DELAY_SAMPLES);
+        float norm_idx = std::fmod(read_pos, static_cast<float>(MAX_DELAY_SAMPLES));
+        if (norm_idx < 0.0f) norm_idx += static_cast<float>(MAX_DELAY_SAMPLES);
+        if (!std::isfinite(norm_idx)) norm_idx = 0.0f;
 
-        const size_t i0 = static_cast<size_t>(idx_f) % MAX_DELAY_SAMPLES;
+        const size_t i0 = static_cast<size_t>(norm_idx) % MAX_DELAY_SAMPLES;
         const size_t i1 = (i0 + 1) % MAX_DELAY_SAMPLES;
-        const float frac = idx_f - std::floor(idx_f);
+        const float frac = norm_idx - std::floor(norm_idx);
 
         return buf[i0] * (1.0f - frac) + buf[i1] * frac;
     }

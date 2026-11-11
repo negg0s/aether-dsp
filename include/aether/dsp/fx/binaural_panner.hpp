@@ -20,10 +20,10 @@ class BinauralPanner {
 public:
     static constexpr float HEAD_RADIUS_M = 0.0875f; // Average human head radius (8.75 cm)
     static constexpr float SPEED_OF_SOUND_MPS = 343.0f; // Speed of sound in dry air at 20C
-    static constexpr size_t MAX_DELAY_SAMPLES = 64; // ~1.3 ms max ITD at 48kHz
+    static constexpr size_t MAX_DELAY_SAMPLES = 256; // High sample rate head ITD buffer
 
     explicit BinauralPanner(uint32_t sample_rate = DEFAULT_SAMPLE_RATE) noexcept
-        : sample_rate_(static_cast<float>(sample_rate)) {
+        : sample_rate_(static_cast<float>(std::clamp(sample_rate, 1000u, 384000u))) {
         delay_l_.resize(MAX_DELAY_SAMPLES, 0.0f);
         delay_r_.resize(MAX_DELAY_SAMPLES, 0.0f);
         shadow_l_.configure(FilterType::Lowpass, 4500.0f, 0.707f, sample_rate_);

@@ -79,6 +79,7 @@ public:
      */
     [[nodiscard]] static Vec2 wrap_point(Vec2 p, size_t side_k) noexcept {
         constexpr float PI = std::numbers::pi_v<float>;
+        side_k = side_k % NUM_SIDES;
         // Angle of side k normal: theta_k = k * (2*pi / 8)
         const float theta_k = static_cast<float>(side_k) * (PI / 4.0f);
 
@@ -93,6 +94,9 @@ public:
         // Poincare disk translation: T(z) = (z - a) / (1 - conj(a) * z)
         const Complex numerator = z - a;
         const Complex denominator = Complex(1.0f, 0.0f) - std::conj(a) * z;
+        if (std::norm(denominator) < 1e-9f) {
+            return p;
+        }
         const Complex wrapped = numerator / denominator;
 
         return Vec2{wrapped.real(), wrapped.imag()};
@@ -103,6 +107,8 @@ public:
      * Computes chaotic ergodic geodesic rays circulating through the genus-2 compact manifold.
      */
     [[nodiscard]] static std::vector<float> synthesize_bolza_ir(uint32_t sample_rate, float duration_sec = 1.5f) {
+        sample_rate = std::clamp(sample_rate, 1000u, 384000u);
+        duration_sec = std::clamp(duration_sec, 0.01f, 10.0f);
         const size_t total_samples = static_cast<size_t>(sample_rate * duration_sec);
         std::vector<float> ir(total_samples, 0.0f);
 

@@ -28,9 +28,9 @@ public:
      * @param stribeck_decay alpha velocity decay factor
      */
     void configure(float static_friction = 0.75f, float dynamic_friction = 0.35f, float stribeck_decay = 4.0f) noexcept {
-        mu_s_ = static_friction;
-        mu_d_ = dynamic_friction;
-        alpha_ = stribeck_decay;
+        mu_s_ = std::clamp(static_friction, 0.0f, 2.0f);
+        mu_d_ = std::clamp(dynamic_friction, 0.0f, mu_s_);
+        alpha_ = std::max(0.01f, stribeck_decay);
     }
 
     /**
@@ -42,6 +42,7 @@ public:
      */
     [[nodiscard]] inline float compute_force(float bow_velocity, float bow_force, float surface_velocity) noexcept {
         const float v_rel = bow_velocity - surface_velocity;
+        if (!std::isfinite(v_rel) || !std::isfinite(bow_force)) return 0.0f;
         const float abs_v = std::abs(v_rel);
 
         // Stribeck non-linear friction coefficient

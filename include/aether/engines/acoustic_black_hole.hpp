@@ -29,7 +29,7 @@ public:
     static constexpr size_t LATTICE_SIZE = 96;
 
     explicit AcousticBlackHole(uint32_t sample_rate = DEFAULT_SAMPLE_RATE) noexcept
-        : sample_rate_(sample_rate) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)) {
         init_lattice();
         reset();
     }
@@ -102,7 +102,8 @@ public:
             }
 
             const float denom = 1.0f / (1.0f + d_local);
-            u_next_[i] = ((2.0f - d_local) * u_[i] - u_prev_[i] + flux + hawking_noise) * denom;
+            const float updated = ((2.0f - d_local) * u_[i] - u_prev_[i] + flux + hawking_noise) * denom;
+            u_next_[i] = std::isfinite(updated) ? std::clamp(updated, -10.0f, 10.0f) : 0.0f;
         }
 
         constexpr size_t OUT_PICKUP = static_cast<size_t>(LATTICE_SIZE * 0.82f);

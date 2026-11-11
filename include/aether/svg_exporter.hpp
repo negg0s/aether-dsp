@@ -26,7 +26,7 @@ public:
                                    const std::string& filepath,
                                    int width = 800,
                                    int height = 800) {
-        if (width < 100 || height < 100) return false;
+        if (width < 100 || height < 100 || width > 16384 || height > 16384) return false;
         std::ofstream out(filepath);
         if (!out.is_open()) return false;
 
@@ -86,7 +86,7 @@ public:
     static bool export_poincare_tiling_svg(const std::vector<math::HyperbolicTile>& tiles,
                                            const std::string& filepath,
                                            int size = 800) {
-        if (size < 100) return false;
+        if (size < 100 || size > 16384) return false;
         std::ofstream out(filepath);
         if (!out.is_open()) return false;
 

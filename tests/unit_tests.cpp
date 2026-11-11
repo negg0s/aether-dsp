@@ -1235,8 +1235,79 @@ void test_henon_heiles_boundedness() {
     std::cout << "PASSED\n";
 }
 
+void test_hyperbolic_halfplane_singularities() {
+    std::cout << "[TEST] Hyperbolic Half-Plane Singularity Guards... ";
+    using aether::math::HyperbolicHalfPlane;
+    using Complex = HyperbolicHalfPlane::Complex;
+
+    // Degenerate Mobius transform (det == 0)
+    HyperbolicHalfPlane::MobiusTransform degen{0.0, 0.0, 0.0, 0.0};
+    auto inv = degen.inverse();
+    assert(inv.determinant() == 1.0);
+
+    // Disk to halfplane at w = 1.0 (boundary pole)
+    Complex at_boundary(1.0, 0.0);
+    Complex hp = HyperbolicHalfPlane::disk_to_halfplane(at_boundary);
+    assert(std::isfinite(hp.imag()));
+
+    // Halfplane to disk at z = -i (pole)
+    Complex neg_i(0.0, -1.0);
+    Complex dsk = HyperbolicHalfPlane::halfplane_to_disk(neg_i);
+    assert(std::isfinite(dsk.real()) && std::isfinite(dsk.imag()));
+
+    // Negative taps and negative base delay
+    auto empty1 = HyperbolicHalfPlane::generate_modular_delay_taps(0, 10.0f);
+    auto empty2 = HyperbolicHalfPlane::generate_modular_delay_taps(10, -5.0f);
+    assert(empty1.empty());
+    assert(empty2.empty());
+    std::cout << "PASSED\n";
+}
+
+void test_bolza_surface_boundary_wrap() {
+    std::cout << "[TEST] Bolza Surface Boundary Wraps & Clamping... ";
+    using aether::math::BolzaSurface;
+    aether::Vec2 p{0.5f, 0.5f};
+    // Modulo side wraps
+    auto wrapped = BolzaSurface::wrap_point(p, 100);
+    assert(std::isfinite(wrapped.x) && std::isfinite(wrapped.y));
+
+    // Zero sample rate or invalid duration in IR synthesis
+    auto ir = BolzaSurface::synthesize_bolza_ir(0, -1.0f);
+    assert(!ir.empty());
+    for (float val : ir) {
+        assert(std::isfinite(val));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_binaural_panner_high_sample_rate() {
+    std::cout << "[TEST] Binaural Panner 192kHz ITD Buffer Scaling... ";
+    aether::dsp::fx::BinauralPanner panner(192000);
+    panner.set_position(90.0f, 1.0f);
+    for (int i = 0; i < 500; ++i) {
+        auto frame = panner.process(0.5f);
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_stick_slip_finite_force() {
+    std::cout << "[TEST] Stick-Slip Exciter Non-Finite Input Handling... ";
+    aether::engines::StickSlipExciter exciter;
+    exciter.configure(0.8f, 0.3f, 4.0f);
+
+    float nan_val = std::numeric_limits<float>::quiet_NaN();
+    float inf_val = std::numeric_limits<float>::infinity();
+
+    float f1 = exciter.compute_force(nan_val, 1.0f, 0.0f);
+    float f2 = exciter.compute_force(1.0f, inf_val, 0.0f);
+    assert(f1 == 0.0f);
+    assert(f2 == 0.0f);
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (57 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (61 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -1294,6 +1365,10 @@ int main() {
     test_partitioned_convolution_reset();
     test_pseudosphere_horn_extreme_params();
     test_henon_heiles_boundedness();
-    std::cout << "\033[1;32mALL 57 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_hyperbolic_halfplane_singularities();
+    test_bolza_surface_boundary_wrap();
+    test_binaural_panner_high_sample_rate();
+    test_stick_slip_finite_force();
+    std::cout << "\033[1;32mALL 61 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

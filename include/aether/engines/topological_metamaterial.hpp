@@ -31,7 +31,7 @@ public:
     static constexpr size_t TOTAL_NODES = WIDTH * HEIGHT;
 
     explicit TopologicalMetamaterial(uint32_t sample_rate = DEFAULT_SAMPLE_RATE) noexcept
-        : sample_rate_(sample_rate) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)) {
         init_lattice();
         reset();
     }
@@ -106,7 +106,8 @@ public:
                 // Topological mass potential restoring term V(x, y) * u
                 const float m_term = mass_profile_[idx] * 0.08f * u_[idx] * rate_scale * rate_scale;
 
-                u_next_[idx] = ((2.0f - effective_damping) * u_[idx] - u_prev_[idx] + c2 * laplacian - m_term) * damp_factor;
+                const float updated = ((2.0f - effective_damping) * u_[idx] - u_prev_[idx] + c2 * laplacian - m_term) * damp_factor;
+                u_next_[idx] = std::isfinite(updated) ? std::clamp(updated, -10.0f, 10.0f) : 0.0f;
             }
         }
 

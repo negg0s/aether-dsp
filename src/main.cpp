@@ -958,23 +958,43 @@ int main(int argc, char** argv) {
         } else if (arg == "--fft-bench") {
             run_fft_benchmark();
             return 0;
-        } else if (arg == "--resynthesize" && i + 2 < argc) {
-            std::string in_file = argv[++i];
-            std::string out_file = argv[++i];
-            resynthesize_wav(in_file, out_file);
-            return 0;
-        } else if (arg == "--play" && i + 1 < argc) {
-            std::string wav_file = argv[++i];
-            play_wav_live(wav_file);
-            return 0;
-        } else if (arg == "--visualize" && i + 1 < argc) {
-            std::string wav_file = argv[++i];
-            visualize_audio_file(wav_file);
-            return 0;
-        } else if (arg == "--spectrogram" && i + 1 < argc) {
-            std::string wav_file = argv[++i];
-            spectrogram_audio_file(wav_file);
-            return 0;
+        } else if (arg == "--resynthesize") {
+            if (i + 2 < argc) {
+                std::string in_file = argv[++i];
+                std::string out_file = argv[++i];
+                resynthesize_wav(in_file, out_file);
+                return 0;
+            } else {
+                std::cerr << "Error: --resynthesize requires <input.wav> and <output.wav>\n";
+                return 1;
+            }
+        } else if (arg == "--play") {
+            if (i + 1 < argc) {
+                std::string wav_file = argv[++i];
+                play_wav_live(wav_file);
+                return 0;
+            } else {
+                std::cerr << "Error: --play requires <input.wav>\n";
+                return 1;
+            }
+        } else if (arg == "--visualize") {
+            if (i + 1 < argc) {
+                std::string wav_file = argv[++i];
+                visualize_audio_file(wav_file);
+                return 0;
+            } else {
+                std::cerr << "Error: --visualize requires <input.wav>\n";
+                return 1;
+            }
+        } else if (arg == "--spectrogram") {
+            if (i + 1 < argc) {
+                std::string wav_file = argv[++i];
+                spectrogram_audio_file(wav_file);
+                return 0;
+            } else {
+                std::cerr << "Error: --spectrogram requires <input.wav>\n";
+                return 1;
+            }
         } else if (arg == "--phase-space" || arg == "--orbit") {
             run_phase_space_demo();
             return 0;

@@ -108,6 +108,8 @@ public:
      * @brief Render Audio Waveform Oscilloscope in Braille.
      */
     static void display_waveform(std::span<const StereoFrame> frames, int char_w = 64, int char_h = 10) {
+        char_w = std::clamp(char_w, 10, 500);
+        char_h = std::clamp(char_h, 4, 200);
         BrailleCanvas canvas(char_w, char_h);
         const int px_w = canvas.pixel_width();
         const int px_h = canvas.pixel_height();
@@ -217,6 +219,8 @@ public:
      * @brief Return waveform Braille visualization as a string for real-time live displays.
      */
     static std::string get_waveform_string(std::span<const StereoFrame> frames, int char_w = 64, int char_h = 8) {
+        char_w = std::clamp(char_w, 10, 500);
+        char_h = std::clamp(char_h, 4, 200);
         BrailleCanvas canvas(char_w, char_h);
         const int px_w = canvas.pixel_width();
         const int px_h = canvas.pixel_height();
@@ -264,6 +268,8 @@ public:
      * Vertical axis: Time [0..Duration]
      */
     static void display_spectrogram(std::span<const StereoFrame> frames, uint32_t sample_rate, int char_w = 60, int char_h = 16) {
+        char_w = std::clamp(char_w, 10, 500);
+        char_h = std::clamp(char_h, 4, 200);
         BrailleCanvas canvas(char_w, char_h);
         const int px_w = canvas.pixel_width();
         const int px_h = canvas.pixel_height();
@@ -271,7 +277,7 @@ public:
         if (frames.size() < 256) return;
 
         constexpr size_t N_FFT = 256;
-        const size_t time_step = frames.size() / px_h;
+        const size_t time_step = std::max(size_t{1}, frames.size() / px_h);
         const float max_freq = 4000.0f;
         const float bin_hz = static_cast<float>(sample_rate) / N_FFT;
 
@@ -327,6 +333,8 @@ public:
                                     float min_x, float max_x, float min_y, float max_y,
                                     int char_w = 40, int char_h = 16,
                                     const std::string& title = "Phase Space (q, p)") {
+        char_w = std::clamp(char_w, 10, 500);
+        char_h = std::clamp(char_h, 4, 200);
         BrailleCanvas canvas(char_w, char_h);
         const int px_w = canvas.pixel_width();
         const int px_h = canvas.pixel_height();

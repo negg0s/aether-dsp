@@ -30,7 +30,7 @@ public:
     static constexpr size_t THROAT_NODES = 16;
 
     explicit AcousticWormhole(uint32_t sample_rate = DEFAULT_SAMPLE_RATE) noexcept
-        : sample_rate_(sample_rate) {
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)) {
         reset();
     }
 
@@ -110,14 +110,16 @@ public:
             const float r = static_cast<float>(i);
             const float r_factor = 1.0f + 0.5f * (b0_ * b0_) / (1.0f + r * r);
             const float laplacian = (u_a_[i + 1] - 2.0f * u_a_[i] + u_a_[i - 1]) * r_factor;
-            u_a_next_[i] = ((2.0f - effective_damping) * u_a_[i] - u_a_prev_[i] + c2 * laplacian) * damp_factor;
+            const float val_a = ((2.0f - effective_damping) * u_a_[i] - u_a_prev_[i] + c2 * laplacian) * damp_factor;
+            u_a_next_[i] = std::isfinite(val_a) ? std::clamp(val_a, -10.0f, 10.0f) : 0.0f;
         }
 
         for (size_t i = 1; i < UNIVERSE_GRID - 1; ++i) {
             const float r = static_cast<float>(i);
             const float r_factor = 1.0f + 0.5f * (b0_ * b0_) / (1.0f + r * r);
             const float laplacian = (u_b_[i + 1] - 2.0f * u_b_[i] + u_b_[i - 1]) * r_factor;
-            u_b_next_[i] = ((2.0f - effective_damping) * u_b_[i] - u_b_prev_[i] + c2 * laplacian) * damp_factor;
+            const float val_b = ((2.0f - effective_damping) * u_b_[i] - u_b_prev_[i] + c2 * laplacian) * damp_factor;
+            u_b_next_[i] = std::isfinite(val_b) ? std::clamp(val_b, -10.0f, 10.0f) : 0.0f;
         }
 
         // Throat boundaries couple to Universe A (u_a_[0]) and Universe B (u_b_[0])

@@ -32,11 +32,17 @@ public:
         [[nodiscard]] Complex apply(const Complex& z) const noexcept {
             const Complex num = a * z + b;
             const Complex den = c * z + d;
+            if (std::abs(den) < 1e-12) {
+                return Complex(0.0, 1e9);
+            }
             return num / den;
         }
 
         [[nodiscard]] MobiusTransform inverse() const noexcept {
             const double det = determinant();
+            if (std::abs(det) < 1e-12) {
+                return MobiusTransform{1.0, 0.0, 0.0, 1.0};
+            }
             return MobiusTransform{d / det, -b / det, -c / det, a / det};
         }
 
@@ -55,6 +61,9 @@ public:
      *   w in D |-> z = i * (1 + w) / (1 - w) in H^2
      */
     static Complex disk_to_halfplane(const Complex& w) noexcept {
+        if (std::abs(1.0 - w) < 1e-9) {
+            return Complex(0.0, 1e9);
+        }
         const Complex i(0.0, 1.0);
         return i * (1.0 + w) / (1.0 - w);
     }
@@ -65,6 +74,9 @@ public:
      */
     static Complex halfplane_to_disk(const Complex& z) noexcept {
         const Complex i(0.0, 1.0);
+        if (std::abs(z + i) < 1e-9) {
+            return Complex(1.0, 0.0);
+        }
         return (z - i) / (z + i);
     }
 
@@ -90,6 +102,10 @@ public:
      *   S: z |-> -1 / z  (inversion)
      */
     static std::vector<float> generate_modular_delay_taps(int num_taps, float base_delay_ms) {
+        if (num_taps <= 0 || base_delay_ms <= 0.0f) {
+            return {};
+        }
+        num_taps = std::min(num_taps, 1024);
         std::vector<float> taps;
         taps.reserve(num_taps);
 
