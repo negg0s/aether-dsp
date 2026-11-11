@@ -46,6 +46,12 @@ public:
      */
     template <typename ForceFunc>
     static void step(State& state, double dt, ForceFunc&& compute_force) noexcept {
+        if (!std::isfinite(state.q) || !std::isfinite(state.p)) {
+            state.q = 0.0;
+            state.p = 0.0;
+            return;
+        }
+
         // Stage 1
         state.q += C1 * dt * state.p;
         state.p += D1 * dt * compute_force(state.q);
@@ -60,6 +66,11 @@ public:
 
         // Stage 4
         state.q += C4 * dt * state.p;
+
+        if (!std::isfinite(state.q) || !std::isfinite(state.p)) {
+            state.q = 0.0;
+            state.p = 0.0;
+        }
     }
 
     /**
@@ -67,6 +78,7 @@ public:
      */
     template <typename PotentialFunc>
     [[nodiscard]] static double total_energy(const State& state, PotentialFunc&& compute_potential) noexcept {
+        if (!std::isfinite(state.q) || !std::isfinite(state.p)) return 0.0;
         return 0.5 * state.p * state.p + compute_potential(state.q);
     }
 };

@@ -102,6 +102,7 @@ public:
                                                  double duration_sec,
                                                  uint32_t sample_rate = DEFAULT_SAMPLE_RATE) {
         if (duration_sec <= 0.0) return {};
+        sample_rate = std::clamp(sample_rate, 1000u, 384000u);
         const size_t total_samples = static_cast<size_t>(duration_sec * sample_rate);
         std::vector<StereoFrame> output(total_samples, StereoFrame{0.0f, 0.0f});
 

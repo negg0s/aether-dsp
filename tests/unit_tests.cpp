@@ -1306,8 +1306,91 @@ void test_stick_slip_finite_force() {
     std::cout << "PASSED\n";
 }
 
+void test_engine_reset() {
+    std::cout << "[TEST] Master Engine Full Reset to Silence... ";
+    aether::Engine engine(48000);
+    engine.load_preset(aether::Preset::HyperbolicCosmicBell);
+    engine.note_on({0.3f, 0.3f}, 0.9f);
+
+    std::vector<aether::StereoFrame> block(128);
+    engine.process_block(block);
+
+    float energy = 0.0f;
+    for (const auto& f : block) {
+        energy += std::abs(f.left) + std::abs(f.right);
+    }
+    assert(energy > 0.01f);
+
+    // Reset clears all sound
+    engine.reset();
+    engine.process_block(block);
+    float energy_after = 0.0f;
+    for (const auto& f : block) {
+        energy_after += std::abs(f.left) + std::abs(f.right);
+    }
+    assert(energy_after < 1e-4f);
+    std::cout << "PASSED\n";
+}
+
+void test_c_api_extended() {
+    std::cout << "[TEST] Extended C-ABI Functions (Scale, Degree, Reset)... ";
+    auto handle = aether_engine_create(48000);
+    assert(handle != nullptr);
+
+    aether_engine_set_scale(handle, 1); // Bohlen-Pierce
+    aether_engine_note_on_degree(handle, 3, 0.85f);
+
+    std::vector<float> buffer(128 * 2);
+    aether_engine_process_interleaved(handle, buffer.data(), 128);
+
+    float energy = 0.0f;
+    for (float smp : buffer) {
+        energy += std::abs(smp);
+    }
+    assert(energy > 0.01f);
+
+    aether_engine_all_notes_off(handle);
+    aether_engine_reset(handle);
+    aether_engine_destroy(handle);
+    std::cout << "PASSED\n";
+}
+
+void test_fft_non_power_of_two_graceful() {
+    std::cout << "[TEST] FFT Graceful Handling of Non-Power-of-Two Spans... ";
+    using aether::math::FFT;
+    using Complex = FFT::Complex;
+
+    std::vector<Complex> bad_span(7, Complex(1.0f, 0.0f));
+    // Must return cleanly without assertion failure or crash
+    FFT::forward(bad_span);
+    FFT::inverse(bad_span);
+    FFT::bit_reverse(bad_span);
+
+    std::vector<float> bad_input(7, 1.0f);
+    std::vector<float> bad_output(4, 0.0f);
+    FFT::compute_power_spectrum(bad_input, bad_output);
+    std::cout << "PASSED\n";
+}
+
+void test_yoshida_integrator_non_finite_healing() {
+    std::cout << "[TEST] Yoshida 4th Integrator Non-Finite State Healing... ";
+    using aether::math::Yoshida4thIntegrator;
+    Yoshida4thIntegrator::State state{
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity()
+    };
+
+    Yoshida4thIntegrator::step(state, 0.001, [](double q) { return -q; });
+    assert(state.q == 0.0);
+    assert(state.p == 0.0);
+
+    double e = Yoshida4thIntegrator::total_energy(state, [](double q) { return 0.5 * q * q; });
+    assert(std::isfinite(e));
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (61 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (65 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -1369,6 +1452,10 @@ int main() {
     test_bolza_surface_boundary_wrap();
     test_binaural_panner_high_sample_rate();
     test_stick_slip_finite_force();
-    std::cout << "\033[1;32mALL 61 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_engine_reset();
+    test_c_api_extended();
+    test_fft_non_power_of_two_graceful();
+    test_yoshida_integrator_non_finite_healing();
+    std::cout << "\033[1;32mALL 65 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

@@ -21,15 +21,25 @@ public:
      * @brief Load impulse response stereo frames.
      */
     void load_impulse_response(const std::vector<StereoFrame>& ir, float wet_mix = 0.4f) {
-        ir_left_.resize(ir.size());
-        ir_right_.resize(ir.size());
-        for (size_t i = 0; i < ir.size(); ++i) {
+        if (ir.empty()) {
+            ir_left_.clear();
+            ir_right_.clear();
+            history_left_.clear();
+            history_right_.clear();
+            cursor_ = 0;
+            return;
+        }
+
+        const size_t sz = std::min(ir.size(), size_t{65536});
+        ir_left_.resize(sz);
+        ir_right_.resize(sz);
+        for (size_t i = 0; i < sz; ++i) {
             ir_left_[i] = ir[i].left;
             ir_right_[i] = ir[i].right;
         }
 
-        history_left_.assign(ir.size(), 0.0f);
-        history_right_.assign(ir.size(), 0.0f);
+        history_left_.assign(sz, 0.0f);
+        history_right_.assign(sz, 0.0f);
         cursor_ = 0;
         wet_mix_ = std::clamp(wet_mix, 0.0f, 1.0f);
     }

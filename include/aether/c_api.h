@@ -65,6 +65,26 @@ AETHER_API void aether_engine_note_on(aether_engine_handle_t handle, float strik
 AETHER_API void aether_engine_note_off(aether_engine_handle_t handle);
 
 /**
+ * @brief Trigger note degree using active microtonal tuning scale.
+ */
+AETHER_API void aether_engine_note_on_degree(aether_engine_handle_t handle, int degree, float velocity);
+
+/**
+ * @brief Set microtonal scale from the built-in Scala catalog by index.
+ */
+AETHER_API void aether_engine_set_scale(aether_engine_handle_t handle, size_t scale_index);
+
+/**
+ * @brief Turn off all sounding polyphonic voices and release envelope.
+ */
+AETHER_API void aether_engine_all_notes_off(aether_engine_handle_t handle);
+
+/**
+ * @brief Reset all internal physical resonators, filters, reverbs, and envelopes to silence.
+ */
+AETHER_API void aether_engine_reset(aether_engine_handle_t handle);
+
+/**
  * @brief Render interleaved stereo floating-point samples.
  * @param interleaved_out Output buffer of size (num_frames * 2) floats
  * @param num_frames Number of stereo frames to render

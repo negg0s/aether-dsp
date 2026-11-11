@@ -292,6 +292,29 @@ public:
     }
 
     /**
+     * @brief Reset all internal physical resonators, filters, reverbs, and envelopes to silence.
+     */
+    void reset() noexcept {
+        filter_l_.reset();
+        filter_r_.reset();
+        env_.reset();
+        reverb_.reset();
+        waveguide_.reset();
+        chladni_.reset();
+        chaos_.reset();
+        von_karman_.reset();
+        pseudosphere_.reset();
+        henon_heiles_.reset();
+        string_.reset();
+        sine_gordon_.reset();
+        acoustic_bh_.reset();
+        wormhole_.reset();
+        topological_.reset();
+        soliton_lattice_.reset();
+        polyphony_.reset();
+    }
+
+    /**
      * @brief Real-time audio rendering block process.
      * ZERO heap allocation, strictly noexcept, AVX2-accelerated.
      */

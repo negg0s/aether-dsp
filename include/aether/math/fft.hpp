@@ -40,7 +40,7 @@ public:
      */
     static void bit_reverse(std::span<Complex> data) noexcept {
         const size_t n = data.size();
-        assert(is_power_of_two(n));
+        if (n <= 1 || !is_power_of_two(n)) return;
 
         size_t j = 0;
         for (size_t i = 0; i < n - 1; ++i) {
@@ -61,6 +61,7 @@ public:
      * Computes X[k] = sum_{n=0}^{N-1} x[n] * e^{-i * 2*pi * k * n / N}
      */
     static void forward(std::span<Complex> data) noexcept {
+        if (data.size() <= 1 || !is_power_of_two(data.size())) return;
         transform(data, false);
     }
 
@@ -69,6 +70,7 @@ public:
      * Computes x[n] = (1/N) * sum_{k=0}^{N-1} X[k] * e^{i * 2*pi * k * n / N}
      */
     static void inverse(std::span<Complex> data) noexcept {
+        if (data.size() <= 1 || !is_power_of_two(data.size())) return;
         transform(data, true);
         const float inv_n = 1.0f / static_cast<float>(data.size());
         for (auto& x : data) {
@@ -120,8 +122,10 @@ public:
                                        std::span<float> power_output,
                                        WindowType window = WindowType::Hann) {
         const size_t n = real_input.size();
-        assert(is_power_of_two(n));
-        assert(power_output.size() >= n / 2 + 1);
+        if (n <= 1 || !is_power_of_two(n) || power_output.size() < n / 2 + 1) {
+            std::fill(power_output.begin(), power_output.end(), 0.0f);
+            return;
+        }
 
         std::vector<Complex> buffer(n);
         std::vector<float> windowed(real_input.begin(), real_input.end());

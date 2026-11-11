@@ -49,6 +49,16 @@ public:
     }
 
     /**
+     * @brief Reset all modal vibrations to silence.
+     */
+    void reset() noexcept {
+        for (auto& mode : modes_) {
+            mode.amplitude = 0.0f;
+            mode.phase = 0.0f;
+        }
+    }
+
+    /**
      * @brief Excite plate at normalized coordinates (x, y) in [-1, 1].
      */
     void strike(Vec2 strike_coord, float velocity = 0.9f) noexcept {

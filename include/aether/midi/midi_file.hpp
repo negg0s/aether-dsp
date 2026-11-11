@@ -112,6 +112,7 @@ public:
         if (!in.good() || header_len < 6) return false;
         format = read_be16(in);
         uint16_t num_tracks = read_be16(in);
+        if (num_tracks > 1024) num_tracks = 1024;
         ticks_per_quarter_note = read_be16(in);
         if (!in.good()) return false;
 

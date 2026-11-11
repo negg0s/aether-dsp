@@ -82,6 +82,18 @@ class AetherEngine:
         self.lib.aether_engine_note_off.argtypes = [ctypes.c_void_p]
         self.lib.aether_engine_note_off.restype = None
 
+        self.lib.aether_engine_note_on_degree.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_float]
+        self.lib.aether_engine_note_on_degree.restype = None
+
+        self.lib.aether_engine_set_scale.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+        self.lib.aether_engine_set_scale.restype = None
+
+        self.lib.aether_engine_all_notes_off.argtypes = [ctypes.c_void_p]
+        self.lib.aether_engine_all_notes_off.restype = None
+
+        self.lib.aether_engine_reset.argtypes = [ctypes.c_void_p]
+        self.lib.aether_engine_reset.restype = None
+
         self.lib.aether_engine_process_interleaved.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float), ctypes.c_size_t]
         self.lib.aether_engine_process_interleaved.restype = None
 
@@ -91,8 +103,20 @@ class AetherEngine:
     def note_on(self, strike_pos: Tuple[float, float] = (0.3, 0.4), velocity: float = 0.9):
         self.lib.aether_engine_note_on(self.handle, strike_pos[0], strike_pos[1], velocity)
 
+    def note_on_degree(self, degree: int, velocity: float = 0.9):
+        self.lib.aether_engine_note_on_degree(self.handle, degree, velocity)
+
+    def set_scale(self, scale_index: int):
+        self.lib.aether_engine_set_scale(self.handle, scale_index)
+
     def note_off(self):
         self.lib.aether_engine_note_off(self.handle)
+
+    def all_notes_off(self):
+        self.lib.aether_engine_all_notes_off(self.handle)
+
+    def reset(self):
+        self.lib.aether_engine_reset(self.handle)
 
     def render(self, duration_sec: float = 2.0, block_size: int = 64) -> List[Tuple[float, float]]:
         if duration_sec <= 0:

@@ -44,6 +44,15 @@ struct PolyVoice {
         envelope.gate(false);
     }
 
+    void reset() noexcept {
+        active = false;
+        midi_note = -1;
+        velocity = 0.0f;
+        age = 0;
+        envelope.reset();
+        resonator.reset();
+    }
+
     StereoFrame step() noexcept {
         if (!active) return StereoFrame{0.0f, 0.0f};
 
@@ -66,7 +75,7 @@ template <size_t NUM_VOICES = 8>
 class PolyphonyManager {
 public:
     explicit PolyphonyManager(uint32_t sample_rate = DEFAULT_SAMPLE_RATE)
-        : sample_rate_(sample_rate) {}
+        : sample_rate_(std::clamp(sample_rate, 1000u, 384000u)) {}
 
     void note_on(int note, float freq, float velocity) noexcept {
         ++age_counter_;
@@ -112,6 +121,13 @@ public:
         for (auto& v : voices_) {
             v.note_off();
         }
+    }
+
+    void reset() noexcept {
+        for (auto& v : voices_) {
+            v.reset();
+        }
+        age_counter_ = 0;
     }
 
     StereoFrame step() noexcept {

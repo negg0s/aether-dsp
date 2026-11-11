@@ -28,6 +28,10 @@ extern "C" {
     fn aether_engine_load_preset(handle: *mut c_void, preset_id: c_int);
     fn aether_engine_note_on(handle: *mut c_void, strike_x: c_float, strike_y: c_float, velocity: c_float);
     fn aether_engine_note_off(handle: *mut c_void);
+    fn aether_engine_note_on_degree(handle: *mut c_void, degree: c_int, velocity: c_float);
+    fn aether_engine_set_scale(handle: *mut c_void, scale_index: usize);
+    fn aether_engine_all_notes_off(handle: *mut c_void);
+    fn aether_engine_reset(handle: *mut c_void);
     fn aether_engine_process_interleaved(handle: *mut c_void, out: *mut c_float, num_frames: usize);
 }
 
@@ -66,6 +70,34 @@ impl AetherEngine {
     pub fn note_off(&mut self) {
         unsafe {
             aether_engine_note_off(self.handle);
+        }
+    }
+
+    /// Triggers microtonal scale degree
+    pub fn note_on_degree(&mut self, degree: i32, velocity: f32) {
+        unsafe {
+            aether_engine_note_on_degree(self.handle, degree as c_int, velocity);
+        }
+    }
+
+    /// Sets active microtonal scale from Scala catalog
+    pub fn set_scale(&mut self, scale_index: usize) {
+        unsafe {
+            aether_engine_set_scale(self.handle, scale_index);
+        }
+    }
+
+    /// Turns off all active voices
+    pub fn all_notes_off(&mut self) {
+        unsafe {
+            aether_engine_all_notes_off(self.handle);
+        }
+    }
+
+    /// Resets all physical resonators and envelopes to silence
+    pub fn reset(&mut self) {
+        unsafe {
+            aether_engine_reset(self.handle);
         }
     }
 

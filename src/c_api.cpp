@@ -87,6 +87,35 @@ AETHER_API void aether_engine_note_off(aether_engine_handle_t handle) {
     engine->note_off();
 }
 
+AETHER_API void aether_engine_note_on_degree(aether_engine_handle_t handle, int degree, float velocity) {
+    if (!handle) return;
+    auto* engine = static_cast<aether::Engine*>(handle);
+    engine->note_on_degree(degree, velocity);
+}
+
+AETHER_API void aether_engine_set_scale(aether_engine_handle_t handle, size_t scale_index) {
+    if (!handle) return;
+    auto* engine = static_cast<aether::Engine*>(handle);
+    const auto& catalog = aether::dsp::ScalaCatalog::get_all_scales();
+    if (!catalog.empty()) {
+        const size_t idx = scale_index % catalog.size();
+        const auto& sc = catalog[idx];
+        engine->tuning().load_scale(sc.period, sc.ratios, sc.name);
+    }
+}
+
+AETHER_API void aether_engine_all_notes_off(aether_engine_handle_t handle) {
+    if (!handle) return;
+    auto* engine = static_cast<aether::Engine*>(handle);
+    engine->all_notes_off();
+}
+
+AETHER_API void aether_engine_reset(aether_engine_handle_t handle) {
+    if (!handle) return;
+    auto* engine = static_cast<aether::Engine*>(handle);
+    engine->reset();
+}
+
 AETHER_API void aether_engine_process_interleaved(aether_engine_handle_t handle, float* interleaved_out, size_t num_frames) {
     if (!handle || !interleaved_out || num_frames == 0) return;
     auto* engine = static_cast<aether::Engine*>(handle);
