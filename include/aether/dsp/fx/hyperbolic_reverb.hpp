@@ -47,9 +47,14 @@ public:
         }
         std::array<float, NUM_LINES> outputs{};
 
-        // 1. Read delay line outputs
+        // 1. Read delay line outputs with self-healing check
         for (size_t i = 0; i < NUM_LINES; ++i) {
-            outputs[i] = delay_buffers_[i][write_indices_[i]];
+            float val = delay_buffers_[i][write_indices_[i]];
+            if (!std::isfinite(val)) {
+                reset();
+                return StereoFrame{0.0f, 0.0f};
+            }
+            outputs[i] = val;
         }
 
         // 2. 4x4 Unitary Householder Feedback Matrix: H = I - 2/N * (11^T)

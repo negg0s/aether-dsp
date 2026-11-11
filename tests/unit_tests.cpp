@@ -1562,6 +1562,42 @@ void test_biquad_extreme_q_bounds() {
     std::cout << "PASSED\n";
 }
 
+void test_hyperbolic_reverb_nan_healing() {
+    std::cout << "[TEST] Hyperbolic Reverb Self-Healing Invariant... ";
+    aether::dsp::fx::HyperbolicReverb rev;
+    rev.configure(0.9f, 0.3f, 0.5f);
+    // Process regular audio
+    for (int i = 0; i < 50; ++i) {
+        (void)rev.process({0.1f, -0.1f});
+    }
+    // Inject non-finite input
+    auto nan_out = rev.process({std::numeric_limits<float>::quiet_NaN(), 0.0f});
+    assert(nan_out.left == 0.0f && nan_out.right == 0.0f);
+    // Subsequent normal frames must remain finite and recover
+    for (int i = 0; i < 50; ++i) {
+        auto out = rev.process({0.05f, 0.05f});
+        assert(std::isfinite(out.left));
+        assert(std::isfinite(out.right));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_ring_buffer_reset_concurrency() {
+    std::cout << "[TEST] SPSCRingBuffer Thread-Safe Reset & Capacity... ";
+    aether::SPSCRingBuffer<int, 64> rb;
+    for (int i = 0; i < 30; ++i) {
+        assert(rb.push(i));
+    }
+    assert(rb.size() == 30);
+    assert(!rb.empty());
+    rb.reset();
+    assert(rb.empty());
+    assert(rb.size() == 0);
+    int val = -1;
+    assert(!rb.pop(val));
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1642,6 +1678,8 @@ int main() {
     test_polyphony_clamping();
     test_clap_parameter_query();
     test_biquad_extreme_q_bounds();
-    std::cout << "\033[1;32mALL 78 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_hyperbolic_reverb_nan_healing();
+    test_ring_buffer_reset_concurrency();
+    std::cout << "\033[1;32mALL 80 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

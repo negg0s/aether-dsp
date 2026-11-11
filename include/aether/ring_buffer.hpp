@@ -75,8 +75,8 @@ public:
     }
 
     void reset() noexcept {
-        head_.store(0, std::memory_order_relaxed);
-        tail_.store(0, std::memory_order_relaxed);
+        head_.store(0, std::memory_order_release);
+        tail_.store(0, std::memory_order_release);
     }
 
 private:
