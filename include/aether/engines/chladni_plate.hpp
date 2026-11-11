@@ -150,6 +150,8 @@ private:
     std::array<PlateMode, MAX_MODES> modes_{};
 
     void init_modes(float fundamental_freq, float stiffness) noexcept {
+        fundamental_freq = std::clamp(fundamental_freq, 20.0f, 15000.0f);
+        stiffness = std::clamp(stiffness, 0.05f, 20.0f);
         size_t idx = 0;
         // Generate unique (m, n) eigenmode lattice (m < n avoids anti-symmetric mode cancellation)
         for (uint8_t m = 1; m <= 8 && idx < MAX_MODES; ++m) {
@@ -169,7 +171,7 @@ private:
                 mode.amplitude = 0.0f;
                 mode.phase = 0.0f;
 
-                if (mode.frequency < sample_rate_ * 0.48f) {
+                if (std::isfinite(mode.frequency) && mode.frequency < sample_rate_ * 0.48f) {
                     modes_[idx++] = mode;
                 }
             }

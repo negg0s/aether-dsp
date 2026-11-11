@@ -151,13 +151,19 @@ public:
                     y_new += (contact_force * dt_sub * dt_sub);
                 }
 
-                y_next_[i] = std::clamp(y_new, -0.05f, 0.05f);
+                y_next_[i] = std::isfinite(y_new) ? std::clamp(y_new, -0.05f, 0.05f) : 0.0f;
             }
 
             y_next_[0] = 0.0f;
             y_next_[NUM_POINTS - 1] = 0.0f;
             y_next_[1] = y_next_[2] * 0.5f;
             y_next_[NUM_POINTS - 2] = y_next_[NUM_POINTS - 3] * 0.5f;
+
+            for (size_t i = 0; i < NUM_POINTS; ++i) {
+                if (!std::isfinite(y_next_[i])) {
+                    y_next_[i] = 0.0f;
+                }
+            }
 
             std::copy(y_current_.begin(), y_current_.end(), y_previous_.begin());
             std::copy(y_next_.begin(), y_next_.end(), y_current_.begin());

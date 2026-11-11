@@ -1745,6 +1745,23 @@ void test_binaural_panner_nan_resilience() {
     std::cout << "PASSED\n";
 }
 
+void test_hyperbolic_waveguide_nan_resilience() {
+    std::cout << "[TEST] Hyperbolic Waveguide Non-Finite Resilience... ";
+    aether::engines::HyperbolicWaveguide wg;
+    wg.configure(0.40f, 0.005f, 1.0f);
+    wg.strike({std::numeric_limits<float>::quiet_NaN(), 0.2f},
+              std::numeric_limits<float>::infinity(),
+              std::numeric_limits<float>::quiet_NaN());
+
+    for (int i = 0; i < 100; ++i) {
+        auto out = wg.step({std::numeric_limits<float>::quiet_NaN(), 0.0f},
+                           {0.0f, std::numeric_limits<float>::infinity()});
+        assert(std::isfinite(out.left));
+        assert(std::isfinite(out.right));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1834,6 +1851,7 @@ int main() {
     test_convolution_reverb_nan_sanitizer();
     test_hyperbolic_spatializer_3d_nan_resilience();
     test_binaural_panner_nan_resilience();
-    std::cout << "\033[1;32mALL 87 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_hyperbolic_waveguide_nan_resilience();
+    std::cout << "\033[1;32mALL 88 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

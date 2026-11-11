@@ -60,6 +60,14 @@ public:
      * @brief Strike the hyperbolic space at a specific point inside the Poincare disk.
      */
     void strike(Vec2 strike_pos, float velocity = 0.8f, float radius = 0.12f) noexcept {
+        if (!std::isfinite(strike_pos.x) || !std::isfinite(strike_pos.y)) {
+            strike_pos = {0.0f, 0.0f};
+        }
+        if (!std::isfinite(velocity)) velocity = 0.8f;
+        if (!std::isfinite(radius)) radius = 0.12f;
+        velocity = std::clamp(velocity, -5.0f, 5.0f);
+        radius = std::clamp(radius, 0.01f, 1.0f);
+
         const float r_sq = strike_pos.magnitude_squared();
         if (r_sq >= 0.95f) {
             strike_pos = strike_pos * (0.90f / std::sqrt(r_sq));
@@ -185,8 +193,14 @@ public:
         std::swap(u_curr_, u_next_);
 
         // Readout pickups
-        const Sample left = sample_at(pickup_left);
-        const Sample right = sample_at(pickup_right);
+        Sample left = sample_at(pickup_left);
+        Sample right = sample_at(pickup_right);
+
+        if (!std::isfinite(left) || !std::isfinite(right)) {
+            reset();
+            left = 0.0f;
+            right = 0.0f;
+        }
 
         return {left, right};
     }
