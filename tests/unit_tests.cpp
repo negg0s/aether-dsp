@@ -1691,6 +1691,29 @@ void test_convolution_reverb_nan_sanitizer() {
     std::cout << "PASSED\n";
 }
 
+void test_hyperbolic_spatializer_3d_nan_resilience() {
+    std::cout << "[TEST] Hyperbolic Spatializer 3D Non-Finite Resilience... ";
+    aether::dsp::fx::HyperbolicSpatializer3D spat(48000);
+    // Position with NaN/Inf coordinates should clamp safely to origin
+    spat.set_source_position({std::numeric_limits<float>::quiet_NaN(), 0.2f, 0.1f},
+                             {0.0f, std::numeric_limits<float>::infinity(), 0.0f});
+
+    assert(std::isfinite(spat.geodesic_distance()));
+    assert(std::isfinite(spat.attenuation_gain()));
+
+    // Process non-finite sample
+    auto nan_out = spat.process(std::numeric_limits<float>::quiet_NaN());
+    assert(std::isfinite(nan_out.left));
+    assert(std::isfinite(nan_out.right));
+
+    for (int i = 0; i < 100; ++i) {
+        auto out = spat.process(0.2f);
+        assert(std::isfinite(out.left));
+        assert(std::isfinite(out.right));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1778,6 +1801,7 @@ int main() {
     test_wav_reader_nan_sanitizer();
     test_partitioned_convolution_tail_nan_sanitizer();
     test_convolution_reverb_nan_sanitizer();
-    std::cout << "\033[1;32mALL 85 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_hyperbolic_spatializer_3d_nan_resilience();
+    std::cout << "\033[1;32mALL 86 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

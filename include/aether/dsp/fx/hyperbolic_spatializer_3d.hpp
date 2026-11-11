@@ -69,6 +69,13 @@ public:
      * @brief Set position of observer and source in Poincare Ball (||p|| < 1.0).
      */
     void set_source_position(Position3D source_pos, Position3D listener_pos = {0.0f, 0.0f, 0.0f}) noexcept {
+        if (!std::isfinite(source_pos.x) || !std::isfinite(source_pos.y) || !std::isfinite(source_pos.z)) {
+            source_pos = {0.0f, 0.0f, 0.0f};
+        }
+        if (!std::isfinite(listener_pos.x) || !std::isfinite(listener_pos.y) || !std::isfinite(listener_pos.z)) {
+            listener_pos = {0.0f, 0.0f, 0.0f};
+        }
+
         source_ = source_pos;
         listener_ = listener_pos;
 
@@ -128,6 +135,10 @@ public:
      * @brief Process mono audio input into 3D Non-Euclidean Binaural Stereo output.
      */
     [[nodiscard]] StereoFrame process(float mono_in) noexcept {
+        if (!std::isfinite(mono_in)) {
+            mono_in = 0.0f;
+        }
+
         // Write to ring delay lines
         delay_line_l_[write_idx_] = mono_in;
         delay_line_r_[write_idx_] = mono_in;
@@ -139,8 +150,11 @@ public:
         write_idx_ = (write_idx_ + 1) % MAX_DELAY_SAMPLES;
 
         // Apply acoustic head-shadow filtering and hyperbolic distance attenuation
-        const float out_l = filter_l_.process(sample_l) * gain_;
-        const float out_r = filter_r_.process(sample_r) * gain_;
+        float out_l = filter_l_.process(sample_l) * gain_;
+        float out_r = filter_r_.process(sample_r) * gain_;
+
+        if (!std::isfinite(out_l)) out_l = 0.0f;
+        if (!std::isfinite(out_r)) out_r = 0.0f;
 
         return StereoFrame{out_l, out_r};
     }
