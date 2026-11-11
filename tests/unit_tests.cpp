@@ -1631,6 +1631,29 @@ void test_svg_exporter_finite_vertices() {
     std::cout << "PASSED\n";
 }
 
+void test_wav_reader_nan_sanitizer() {
+    std::cout << "[TEST] WAV Writer/Reader IEEE Float NaN Sanitization... ";
+    std::vector<aether::StereoFrame> nan_frames = {
+        {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()},
+        {0.5f, -0.5f}
+    };
+    const std::string tmp_wav = "test_nan.wav";
+    bool ok_write = aether::WavWriter::write_stereo_wav(tmp_wav, nan_frames, 48000, true);
+    assert(ok_write);
+
+    auto read_back = aether::WavReader::read_wav(tmp_wav);
+    assert(read_back.valid);
+    assert(read_back.frames.size() == 2);
+    // Non-finite values must have been replaced with 0.0f
+    assert(read_back.frames[0].left == 0.0f);
+    assert(read_back.frames[0].right == 0.0f);
+    assert(std::abs(read_back.frames[1].left - 0.5f) < 1e-4f);
+    assert(std::abs(read_back.frames[1].right - (-0.5f)) < 1e-4f);
+
+    std::remove(tmp_wav.c_str());
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1715,6 +1738,7 @@ int main() {
     test_ring_buffer_reset_concurrency();
     test_algorithmic_composer_bounds();
     test_svg_exporter_finite_vertices();
-    std::cout << "\033[1;32mALL 82 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_wav_reader_nan_sanitizer();
+    std::cout << "\033[1;32mALL 83 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

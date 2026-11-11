@@ -105,6 +105,7 @@ public:
                         if (audio_format == 3 && bits_per_sample == 32) {
                             // 32-bit Float
                             std::memcpy(&sample_val, &raw_data[byte_offset], 4);
+                            if (!std::isfinite(sample_val)) sample_val = 0.0f;
                             byte_offset += 4;
                         } else if (audio_format == 1 && bits_per_sample == 16) {
                             // 16-bit PCM

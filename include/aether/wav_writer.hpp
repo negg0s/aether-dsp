@@ -67,8 +67,8 @@ public:
             file.write(reinterpret_cast<const char*>(&data_size), 4);
 
             for (const auto& frame : frames) {
-                float left = frame.left;
-                float right = frame.right;
+                float left = std::isfinite(frame.left) ? frame.left : 0.0f;
+                float right = std::isfinite(frame.right) ? frame.right : 0.0f;
                 file.write(reinterpret_cast<const char*>(&left), sizeof(float));
                 file.write(reinterpret_cast<const char*>(&right), sizeof(float));
             }
@@ -100,7 +100,8 @@ public:
 
             for (const auto& frame : frames) {
                 auto write_sample24 = [&](float s) {
-                    float clamped = std::clamp(s, -1.0f, 1.0f);
+                    float finite_s = std::isfinite(s) ? s : 0.0f;
+                    float clamped = std::clamp(finite_s, -1.0f, 1.0f);
                     int32_t sample24 = static_cast<int32_t>(clamped * 8388607.0f);
                     uint8_t bytes[3];
                     bytes[0] = static_cast<uint8_t>(sample24 & 0xFF);
