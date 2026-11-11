@@ -25,6 +25,7 @@ def main():
     print(f"URL: \033[1;32mhttp://localhost:{PORT}/\033[0m")
     print(f"Press Ctrl+C to terminate.")
 
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         try:
             webbrowser.open(f"http://localhost:{PORT}/")

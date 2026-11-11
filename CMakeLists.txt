@@ -42,6 +42,11 @@ add_executable(aether-tests
     src/c_api.cpp
 )
 
+find_package(Threads REQUIRED)
+target_link_libraries(aether-dsp PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(aether-dsp-shared PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(aether-tests PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+
 enable_testing()
 add_test(NAME AetherUnitTests COMMAND aether-tests)
 
