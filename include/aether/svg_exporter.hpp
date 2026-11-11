@@ -108,6 +108,7 @@ public:
 
             out << R"(<polygon points=")";
             for (const auto& v : tile.vertices) {
+                if (!std::isfinite(v.x) || !std::isfinite(v.y)) continue;
                 const float sx = cx + v.x * r_disk;
                 const float sy = cy + v.y * r_disk;
                 out << std::fixed << std::setprecision(1) << sx << "," << sy << " ";

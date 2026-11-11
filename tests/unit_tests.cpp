@@ -1598,6 +1598,39 @@ void test_ring_buffer_reset_concurrency() {
     std::cout << "PASSED\n";
 }
 
+void test_algorithmic_composer_bounds() {
+    std::cout << "[TEST] Algorithmic Composer Duration & Sample Rate Clamping... ";
+    auto empty_render = aether::math::AlgorithmicComposer::render_score({}, 0.0, 48000);
+    assert(empty_render.empty());
+
+    auto score = aether::math::AlgorithmicComposer::generate_fibonacci_score(0.0);
+    assert(!score.empty()); // Clamped to 0.1s minimum
+
+    auto rendered = aether::math::AlgorithmicComposer::render_score(score, 0.05, 0);
+    assert(!rendered.empty()); // Clamped to minimum sample rate and duration
+    for (const auto& frame : rendered) {
+        assert(std::isfinite(frame.left));
+        assert(std::isfinite(frame.right));
+    }
+    std::cout << "PASSED\n";
+}
+
+void test_svg_exporter_finite_vertices() {
+    std::cout << "[TEST] SVG Exporter Non-Finite Vertex Resilience... ";
+    std::vector<aether::math::HyperbolicTile> tiles;
+    aether::math::HyperbolicTile tile;
+    tile.vertices.push_back({0.1f, 0.2f});
+    tile.vertices.push_back({std::numeric_limits<float>::quiet_NaN(), 0.5f});
+    tile.vertices.push_back({0.3f, 0.4f});
+    tiles.push_back(tile);
+
+    const std::string tmp_svg = "temp_tile_test.svg";
+    bool ok = aether::SvgExporter::export_poincare_tiling_svg(tiles, tmp_svg, 400);
+    assert(ok);
+    std::remove(tmp_svg.c_str());
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1680,6 +1713,8 @@ int main() {
     test_biquad_extreme_q_bounds();
     test_hyperbolic_reverb_nan_healing();
     test_ring_buffer_reset_concurrency();
-    std::cout << "\033[1;32mALL 80 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_algorithmic_composer_bounds();
+    test_svg_exporter_finite_vertices();
+    std::cout << "\033[1;32mALL 82 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
