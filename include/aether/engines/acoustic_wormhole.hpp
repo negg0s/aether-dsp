@@ -124,22 +124,27 @@ public:
 
         // Throat boundaries couple to Universe A (u_a_[0]) and Universe B (u_b_[0])
         const float laplacian_t0 = throat_[1] - 2.0f * throat_[0] + u_a_[0] * b0_;
-        throat_next_[0] = ((2.0f - damping_) * throat_[0] - throat_prev_[0] + c2 * laplacian_t0) * damp_factor;
+        const float val_t0 = ((2.0f - damping_) * throat_[0] - throat_prev_[0] + c2 * laplacian_t0) * damp_factor;
+        throat_next_[0] = std::isfinite(val_t0) ? std::clamp(val_t0, -10.0f, 10.0f) : 0.0f;
 
         for (size_t k = 1; k < THROAT_NODES - 1; ++k) {
             const float laplacian = throat_[k + 1] - 2.0f * throat_[k] + throat_[k - 1];
             const float qnm_restore = -throat_stiffness_ * 0.05f * throat_[k];
-            throat_next_[k] = (2.0f * throat_[k] - throat_prev_[k] + c2 * laplacian + qnm_restore) * 0.9995f;
+            const float val_tk = (2.0f * throat_[k] - throat_prev_[k] + c2 * laplacian + qnm_restore) * 0.9995f;
+            throat_next_[k] = std::isfinite(val_tk) ? std::clamp(val_tk, -10.0f, 10.0f) : 0.0f;
         }
 
         const float laplacian_tend = u_b_[0] * b0_ - 2.0f * throat_[THROAT_NODES - 1] + throat_[THROAT_NODES - 2];
-        throat_next_[THROAT_NODES - 1] = ((2.0f - damping_) * throat_[THROAT_NODES - 1] - throat_prev_[THROAT_NODES - 1] + c2 * laplacian_tend) * damp_factor;
+        const float val_tend = ((2.0f - damping_) * throat_[THROAT_NODES - 1] - throat_prev_[THROAT_NODES - 1] + c2 * laplacian_tend) * damp_factor;
+        throat_next_[THROAT_NODES - 1] = std::isfinite(val_tend) ? std::clamp(val_tend, -10.0f, 10.0f) : 0.0f;
 
         const float laplacian_a0 = u_a_[1] - 2.0f * u_a_[0] + throat_[0] * b0_;
-        u_a_next_[0] = ((2.0f - damping_) * u_a_[0] - u_a_prev_[0] + c2 * laplacian_a0) * damp_factor;
+        const float val_a0 = ((2.0f - damping_) * u_a_[0] - u_a_prev_[0] + c2 * laplacian_a0) * damp_factor;
+        u_a_next_[0] = std::isfinite(val_a0) ? std::clamp(val_a0, -10.0f, 10.0f) : 0.0f;
 
         const float laplacian_b0 = u_b_[1] - 2.0f * u_b_[0] + throat_[THROAT_NODES - 1] * b0_;
-        u_b_next_[0] = ((2.0f - damping_) * u_b_[0] - u_b_prev_[0] + c2 * laplacian_b0) * damp_factor;
+        const float val_b0 = ((2.0f - damping_) * u_b_[0] - u_b_prev_[0] + c2 * laplacian_b0) * damp_factor;
+        u_b_next_[0] = std::isfinite(val_b0) ? std::clamp(val_b0, -10.0f, 10.0f) : 0.0f;
 
         u_a_prev_ = u_a_;
         u_a_ = u_a_next_;

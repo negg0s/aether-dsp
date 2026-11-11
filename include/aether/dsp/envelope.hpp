@@ -24,9 +24,9 @@ public:
     void configure(float attack_sec, float decay_sec, float sustain_level, float release_sec, float sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE)) noexcept {
         sample_rate_ = std::clamp(sample_rate, 1000.0f, 384000.0f);
         sustain_level_ = std::clamp(sustain_level, 0.0f, 1.0f);
-        attack_sec_ = std::max(0.0001f, attack_sec);
-        decay_sec_ = std::max(0.0001f, decay_sec);
-        release_sec_ = std::max(0.0001f, release_sec);
+        attack_sec_ = std::clamp(attack_sec, 0.0001f, 60.0f);
+        decay_sec_ = std::clamp(decay_sec, 0.0001f, 60.0f);
+        release_sec_ = std::clamp(release_sec, 0.0001f, 60.0f);
 
         attack_rate_ = calculate_rate(attack_sec_, 0.0f, 1.0f);
         decay_rate_ = calculate_rate(decay_sec_, 1.0f, sustain_level_);

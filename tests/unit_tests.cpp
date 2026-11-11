@@ -306,6 +306,20 @@ void test_scala_catalog() {
         assert(!sc.ratios.empty());
         assert(sc.ratios[0] == 1.0);
     }
+
+    const auto* bp = aether::dsp::ScalaCatalog::find_by_name("Bohlen-Pierce");
+    assert(bp != nullptr);
+    assert(bp->period == 3.0);
+
+    const auto* non_existent = aether::dsp::ScalaCatalog::find_by_name("NonExistentScaleName");
+    assert(non_existent == nullptr);
+
+    const auto& sc0 = aether::dsp::ScalaCatalog::get_by_index(0);
+    assert(std::string(sc0.name) == "12-EDO");
+
+    const auto& sc_oob = aether::dsp::ScalaCatalog::get_by_index(9999);
+    assert(std::string(sc_oob.name) == "12-EDO");
+
     std::cout << "PASSED\n";
 }
 
@@ -1714,6 +1728,23 @@ void test_hyperbolic_spatializer_3d_nan_resilience() {
     std::cout << "PASSED\n";
 }
 
+void test_binaural_panner_nan_resilience() {
+    std::cout << "[TEST] Binaural Panner Non-Finite Input Resilience... ";
+    aether::dsp::fx::BinauralPanner panner(48000);
+    panner.set_position(std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity());
+
+    auto nan_out = panner.process(std::numeric_limits<float>::quiet_NaN());
+    assert(std::isfinite(nan_out.left));
+    assert(std::isfinite(nan_out.right));
+
+    for (int i = 0; i < 100; ++i) {
+        auto out = panner.process(0.15f);
+        assert(std::isfinite(out.left));
+        assert(std::isfinite(out.right));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1802,6 +1833,7 @@ int main() {
     test_partitioned_convolution_tail_nan_sanitizer();
     test_convolution_reverb_nan_sanitizer();
     test_hyperbolic_spatializer_3d_nan_resilience();
-    std::cout << "\033[1;32mALL 86 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_binaural_panner_nan_resilience();
+    std::cout << "\033[1;32mALL 87 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

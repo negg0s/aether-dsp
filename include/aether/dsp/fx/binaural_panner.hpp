@@ -44,8 +44,10 @@ public:
      * @param distance_m Distance in meters (0.5 to 10.0m)
      */
     void set_position(float azimuth_deg, float distance_m = 1.0f) noexcept {
+        if (!std::isfinite(azimuth_deg)) azimuth_deg = 0.0f;
+        if (!std::isfinite(distance_m)) distance_m = 1.0f;
         const float theta_rad = azimuth_deg * static_cast<float>(constants::PI / 180.0);
-        distance_m = std::max(0.2f, distance_m);
+        distance_m = std::clamp(distance_m, 0.2f, 100.0f);
 
         // Distance attenuation: 1 / (1 + d^2)
         dist_gain_ = 1.0f / (1.0f + 0.5f * distance_m * distance_m);
@@ -79,6 +81,10 @@ public:
     }
 
     [[nodiscard]] StereoFrame process(float mono_in) noexcept {
+        if (!std::isfinite(mono_in)) {
+            mono_in = 0.0f;
+        }
+
         // Write to fractional delay ring buffers
         delay_l_[write_idx_] = mono_in;
         delay_r_[write_idx_] = mono_in;
@@ -93,8 +99,11 @@ public:
         const float shadowed_l = shadow_l_.process(out_l);
         const float shadowed_r = shadow_r_.process(out_r);
 
-        const float final_l = (out_l * (1.0f - shadow_amount_l_) + shadowed_l * shadow_amount_l_) * dist_gain_;
-        const float final_r = (out_r * (1.0f - shadow_amount_r_) + shadowed_r * shadow_amount_r_) * dist_gain_;
+        float final_l = (out_l * (1.0f - shadow_amount_l_) + shadowed_l * shadow_amount_l_) * dist_gain_;
+        float final_r = (out_r * (1.0f - shadow_amount_r_) + shadowed_r * shadow_amount_r_) * dist_gain_;
+
+        if (!std::isfinite(final_l)) final_l = 0.0f;
+        if (!std::isfinite(final_r)) final_r = 0.0f;
 
         return {final_l, final_r};
     }

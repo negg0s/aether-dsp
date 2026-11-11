@@ -2,6 +2,7 @@
 
 #include "tuning.hpp"
 #include <string>
+#include <string_view>
 #include <vector>
 #include <array>
 
@@ -71,6 +72,24 @@ public:
             }
         };
         return catalog;
+    }
+
+    [[nodiscard]] static const ScaleDefinition* find_by_name(std::string_view name) noexcept {
+        const auto& all = get_all_scales();
+        for (const auto& scale : all) {
+            if (name == scale.name) {
+                return &scale;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] static const ScaleDefinition& get_by_index(size_t index) noexcept {
+        const auto& all = get_all_scales();
+        if (index >= all.size()) {
+            return all[0];
+        }
+        return all[index];
     }
 };
 

@@ -114,9 +114,10 @@ public:
                 const float s_mid_minus = 0.5f * (area_[i] + area_[i - 1]);
 
                 const float spatial_deriv = (s_mid_plus * (p_current_[i + 1] - p_current_[i]) -
-                                             s_mid_minus * (p_current_[i] - p_current_[i - 1])) / area_[i];
+                                             s_mid_minus * (p_current_[i] - p_current_[i - 1])) / std::max(area_[i], 1e-7f);
 
-                p_next_[i] = (2.0f * p_current_[i] - p_previous_[i] * gamma + r2 * spatial_deriv) * gamma;
+                float updated = (2.0f * p_current_[i] - p_previous_[i] * gamma + r2 * spatial_deriv) * gamma;
+                p_next_[i] = std::isfinite(updated) ? std::clamp(updated, -50.0f, 50.0f) : 0.0f;
             }
 
             p_next_[0] = p_current_[1] * 0.98f;
@@ -124,7 +125,8 @@ public:
             const float p_bell = p_current_[NUM_CELLS - 2];
             const float radiation_cutoff = 0.25f / static_cast<float>(substeps_);
             bell_radiation_state_ = bell_radiation_state_ * (1.0f - radiation_cutoff) + p_bell * radiation_cutoff;
-            p_next_[NUM_CELLS - 1] = -(p_bell - bell_radiation_state_) * 0.85f;
+            float bell_val = -(p_bell - bell_radiation_state_) * 0.85f;
+            p_next_[NUM_CELLS - 1] = std::isfinite(bell_val) ? std::clamp(bell_val, -50.0f, 50.0f) : 0.0f;
 
             std::copy(p_current_.begin(), p_current_.end(), p_previous_.begin());
             std::copy(p_next_.begin(), p_next_.end(), p_current_.begin());
