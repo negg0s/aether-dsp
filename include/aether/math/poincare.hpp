@@ -54,6 +54,7 @@ public:
         if (denom < 1e-7f) return 15.0f; // Saturated boundary distance
 
         const float delta = 1.0f + 2.0f * dist_sq / denom;
+        if (!std::isfinite(delta)) return 15.0f;
         return std::acosh(std::max(1.0f, delta));
     }
 
@@ -68,6 +69,7 @@ public:
         std::complex<float> den = std::complex<float>(1.0f, 0.0f) - std::conj(ca) * cz;
         if (std::norm(den) < 1e-7f) return z;
         std::complex<float> res = num / den;
+        if (!std::isfinite(res.real()) || !std::isfinite(res.imag())) return z;
         return {res.real(), res.imag()};
     }
 };

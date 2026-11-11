@@ -5,6 +5,7 @@
 #include <vector>
 #include <cmath>
 #include <complex>
+#include <algorithm>
 
 namespace aether::math {
 
@@ -24,7 +25,9 @@ class HyperbolicTiling {
 public:
     static std::vector<HyperbolicTile> generate_tiling(int p = 7, int q = 3, int max_depth = 2) {
         std::vector<HyperbolicTile> tiles;
+        if (p < 3 || q < 3) return tiles;
         if ((p - 2) * (q - 2) <= 4) return tiles; // Must satisfy hyperbolic Gauss-Bonnet theorem
+        max_depth = std::clamp(max_depth, 0, 4);
 
         const double pi_p = constants::PI / p;
         const double pi_q = constants::PI / q;

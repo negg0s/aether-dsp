@@ -1389,8 +1389,58 @@ void test_yoshida_integrator_non_finite_healing() {
     std::cout << "PASSED\n";
 }
 
+void test_tuning_system_extreme_degrees() {
+    std::cout << "[TEST] Tuning System Extreme Degree Octave Clamping... ";
+    aether::dsp::TuningSystem tuning;
+    float f_high = tuning.get_frequency(10000, 440.0f);
+    float f_low = tuning.get_frequency(-10000, 440.0f);
+    assert(std::isfinite(f_high) && f_high > 0.0f);
+    assert(std::isfinite(f_low) && f_low > 0.0f);
+    std::cout << "PASSED\n";
+}
+
+void test_hyperbolic_tiling_bounds() {
+    std::cout << "[TEST] Hyperbolic Tiling Geometric Constraint Bounds... ";
+    using aether::math::HyperbolicTiling;
+    // p, q < 3
+    auto empty1 = HyperbolicTiling::generate_tiling(2, 2, 2);
+    assert(empty1.empty());
+
+    // Euclidean {4, 4} (not hyperbolic)
+    auto empty2 = HyperbolicTiling::generate_tiling(4, 4, 2);
+    assert(empty2.empty());
+
+    // Valid {7, 3} hyperbolic tiling
+    auto tiles = HyperbolicTiling::generate_tiling(7, 3, 1);
+    assert(!tiles.empty());
+    std::cout << "PASSED\n";
+}
+
+void test_poincare_disk_nan_resilience() {
+    std::cout << "[TEST] Poincare Disk Non-Finite Input Resilience... ";
+    using aether::math::PoincareDisk;
+    aether::Vec2 nan_vec{std::numeric_limits<float>::quiet_NaN(), 0.0f};
+    aether::Vec2 valid_vec{0.2f, 0.3f};
+
+    float d = PoincareDisk::geodesic_distance(nan_vec, valid_vec);
+    assert(std::isfinite(d));
+
+    aether::Vec2 mob = PoincareDisk::mobius_transform(nan_vec, valid_vec);
+    (void)mob; // Must execute cleanly without exception
+    std::cout << "PASSED\n";
+}
+
+void test_wav_writer_oversized_guard() {
+    std::cout << "[TEST] WavWriter Sample Rate & Buffer Clamping... ";
+    std::vector<aether::StereoFrame> test_frames(10, aether::StereoFrame{0.1f, -0.1f});
+    bool success = aether::WavWriter::write_stereo_wav("temp_test.wav", test_frames, 0); // 0 Hz sample rate clamped
+    assert(success);
+    std::remove("temp_test.wav");
+    std::cout << "PASSED\n";
+}
+
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (65 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
@@ -1456,6 +1506,10 @@ int main() {
     test_c_api_extended();
     test_fft_non_power_of_two_graceful();
     test_yoshida_integrator_non_finite_healing();
-    std::cout << "\033[1;32mALL 65 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_tuning_system_extreme_degrees();
+    test_hyperbolic_tiling_bounds();
+    test_poincare_disk_nan_resilience();
+    test_wav_writer_oversized_guard();
+    std::cout << "\033[1;32mALL 69 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

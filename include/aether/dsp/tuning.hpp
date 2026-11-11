@@ -161,12 +161,15 @@ public:
             octave -= 1;
         }
 
+        octave = std::clamp(octave, -10, 10);
         const double ratio = ratios_[index] * std::pow(period_ratio_, octave);
-        return static_cast<float>(root_freq * ratio);
+        const float freq = static_cast<float>(root_freq * ratio);
+        return std::isfinite(freq) ? freq : root_freq;
     }
 
     void load_scale(double period, std::vector<double> ratios, std::string description = "") {
         period_ratio_ = period > 0.0 ? period : 2.0;
+        if (ratios.empty()) ratios = {1.0};
         ratios_ = std::move(ratios);
         description_ = std::move(description);
     }

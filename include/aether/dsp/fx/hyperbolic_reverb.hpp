@@ -42,6 +42,9 @@ public:
     }
 
     [[nodiscard]] StereoFrame process(StereoFrame input) noexcept {
+        if (!std::isfinite(input.left) || !std::isfinite(input.right)) {
+            return StereoFrame{0.0f, 0.0f};
+        }
         std::array<float, NUM_LINES> outputs{};
 
         // 1. Read delay line outputs

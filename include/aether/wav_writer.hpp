@@ -27,6 +27,9 @@ public:
                                  std::span<const StereoFrame> frames,
                                  uint32_t sample_rate = DEFAULT_SAMPLE_RATE,
                                  bool use_float = true) {
+        if (frames.size() > 0x1FFFFFFF) return false;
+        sample_rate = std::clamp(sample_rate, 1000u, 384000u);
+
         std::ofstream file(filepath, std::ios::binary);
         if (!file.is_open()) {
             return false;

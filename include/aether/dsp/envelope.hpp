@@ -53,6 +53,12 @@ public:
     }
 
     [[nodiscard]] inline Sample process() noexcept {
+        if (!std::isfinite(value_)) {
+            value_ = 0.0f;
+            stage_ = EnvelopeStage::Idle;
+            return 0.0f;
+        }
+
         switch (stage_) {
             case EnvelopeStage::Idle:
                 value_ = 0.0f;

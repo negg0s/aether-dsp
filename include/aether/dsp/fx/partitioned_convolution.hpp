@@ -35,14 +35,20 @@ public:
      * @param wet_gain Output wet gain scaling
      */
     void load_impulse_response(std::span<const float> ir, float wet_gain = 0.5f) {
-        wet_gain_ = wet_gain;
+        wet_gain_ = std::clamp(wet_gain, 0.0f, 2.0f);
         if (ir.empty()) {
             num_partitions_ = 0;
             num_tail_partitions_ = 0;
+            head_ir_.fill(0.0f);
+            head_history_.fill(0.0f);
+            freq_partitions_.clear();
+            input_history_.clear();
             return;
         }
 
-        num_partitions_ = (ir.size() + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        const size_t max_ir_samples = 524288; // Max ~11s at 48kHz
+        const size_t effective_ir_size = std::min(ir.size(), max_ir_samples);
+        num_partitions_ = (effective_ir_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
         num_tail_partitions_ = num_partitions_ > 1 ? num_partitions_ - 1 : 0;
 
         // 1. Direct Time-Domain FIR Head Partition (Partition 0) for True Zero-Latency
@@ -105,6 +111,9 @@ public:
      * @brief Process a single input sample through the zero-latency partitioned convolution reverb.
      */
     [[nodiscard]] StereoFrame process(StereoFrame input) noexcept {
+        if (!std::isfinite(input.left) || !std::isfinite(input.right)) {
+            return StereoFrame{0.0f, 0.0f};
+        }
         if (num_partitions_ == 0) return input;
 
         const float mono_in = (input.left + input.right) * 0.5f;
