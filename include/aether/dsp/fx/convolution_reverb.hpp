@@ -34,8 +34,8 @@ public:
         ir_left_.resize(sz);
         ir_right_.resize(sz);
         for (size_t i = 0; i < sz; ++i) {
-            ir_left_[i] = ir[i].left;
-            ir_right_[i] = ir[i].right;
+            ir_left_[i] = std::isfinite(ir[i].left) ? ir[i].left : 0.0f;
+            ir_right_[i] = std::isfinite(ir[i].right) ? ir[i].right : 0.0f;
         }
 
         history_left_.assign(sz, 0.0f);
@@ -55,6 +55,7 @@ public:
      * @brief Process a single stereo frame through convolution.
      */
     [[nodiscard]] StereoFrame process(const StereoFrame& in) noexcept {
+        if (!std::isfinite(in.left) || !std::isfinite(in.right)) return StereoFrame{0.0f, 0.0f};
         if (ir_left_.empty()) return in;
 
         const size_t len = ir_left_.size();

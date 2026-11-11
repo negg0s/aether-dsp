@@ -1671,6 +1671,26 @@ void test_partitioned_convolution_tail_nan_sanitizer() {
     std::cout << "PASSED\n";
 }
 
+void test_convolution_reverb_nan_sanitizer() {
+    std::cout << "[TEST] Convolution Reverb Non-Finite Frame Sanitization... ";
+    aether::dsp::fx::ConvolutionReverb rev;
+    std::vector<aether::StereoFrame> ir = {
+        {std::numeric_limits<float>::quiet_NaN(), 0.5f},
+        {0.2f, std::numeric_limits<float>::infinity()}
+    };
+    rev.load_impulse_response(ir, 0.5f);
+
+    auto nan_in = rev.process({std::numeric_limits<float>::quiet_NaN(), 0.0f});
+    assert(nan_in.left == 0.0f && nan_in.right == 0.0f);
+
+    for (int i = 0; i < 16; ++i) {
+        auto out = rev.process({0.1f, 0.1f});
+        assert(std::isfinite(out.left));
+        assert(std::isfinite(out.right));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1757,6 +1777,7 @@ int main() {
     test_svg_exporter_finite_vertices();
     test_wav_reader_nan_sanitizer();
     test_partitioned_convolution_tail_nan_sanitizer();
-    std::cout << "\033[1;32mALL 84 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_convolution_reverb_nan_sanitizer();
+    std::cout << "\033[1;32mALL 85 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
