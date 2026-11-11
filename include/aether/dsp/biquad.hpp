@@ -31,7 +31,7 @@ public:
     void configure(FilterType type, float cutoff_hz, float q, float sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE)) noexcept {
         sample_rate = std::clamp(sample_rate, 1000.0f, 384000.0f);
         cutoff_hz = std::clamp(cutoff_hz, 10.0f, sample_rate * 0.49f);
-        q = std::max(0.1f, q);
+        q = std::clamp(q, 0.05f, 100.0f);
 
         const float omega = static_cast<float>(2.0 * constants::PI) * cutoff_hz / sample_rate;
         const float sin_w = std::sin(omega);

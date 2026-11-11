@@ -1539,6 +1539,29 @@ void test_polyphony_clamping() {
     std::cout << "PASSED\n";
 }
 
+void test_clap_parameter_query() {
+    std::cout << "[TEST] CLAP Parameter Catalog Query & Bounds... ";
+    assert(aether::plugin::get_parameter_count() == 6);
+    const auto* p0 = aether::plugin::get_parameter_info(aether::plugin::PARAM_PRESET);
+    assert(p0 != nullptr);
+    assert(p0->min_value == 0.0f);
+    assert(p0->max_value == 13.0f);
+    const auto* invalid = aether::plugin::get_parameter_info(999);
+    assert(invalid == nullptr);
+    std::cout << "PASSED\n";
+}
+
+void test_biquad_extreme_q_bounds() {
+    std::cout << "[TEST] Biquad Filter Extreme Q Boundary Clamping... ";
+    aether::dsp::BiquadFilter f;
+    f.configure(aether::dsp::FilterType::Lowpass, 1000.0f, 1e8f, 48000.0f);
+    for (int i = 0; i < 64; ++i) {
+        float out = f.process(1.0f);
+        assert(std::isfinite(out));
+    }
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1617,6 +1640,8 @@ int main() {
     test_chaotic_oscillator_nan_recovery();
     test_tuning_scale_sanitization();
     test_polyphony_clamping();
-    std::cout << "\033[1;32mALL 76 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_clap_parameter_query();
+    test_biquad_extreme_q_bounds();
+    std::cout << "\033[1;32mALL 78 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

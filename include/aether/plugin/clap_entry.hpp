@@ -87,6 +87,20 @@ struct clap_plugin_entry_t {
     const void* (*get_factory)(const char* factory_id){nullptr};
 };
 
+
+inline size_t get_parameter_count() noexcept {
+    return sizeof(PARAMETER_CATALOG) / sizeof(PARAMETER_CATALOG[0]);
+}
+
+inline const ParameterInfo* get_parameter_info(uint32_t id) noexcept {
+    for (size_t i = 0; i < get_parameter_count(); ++i) {
+        if (PARAMETER_CATALOG[i].id == id) {
+            return &PARAMETER_CATALOG[i];
+        }
+    }
+    return nullptr;
+}
+
 inline const clap_plugin_entry_t& get_entry() noexcept {
     static const clap_plugin_entry_t entry{
         .clap_version = {1, 1, 10},
