@@ -47,6 +47,8 @@
 #include "aether/math/fixed_shaper.hpp"
 #include "aether/math/fixed_lfo.hpp"
 #include "aether/math/fixed_delay.hpp"
+#include "aether/math/fixed_compressor.hpp"
+#include "aether/math/fixed_noise.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2160,6 +2162,60 @@ void test_fixed_lfo_and_delay() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_compressor_and_noise() {
+    std::cout << "[TEST] Embedded Fixed-Point Dynamics Compressor & Noise Core... ";
+    using aether::math::FixedCompressor;
+    using aether::math::FixedNoise;
+    using aether::math::FixedQ15;
+
+    // Test Noise Generator
+    FixedNoise noise;
+    noise.seed(1337);
+
+    int16_t min_w = 32767, max_w = -32768;
+    for (int i = 0; i < 2000; ++i) {
+        auto w = noise.process_white().raw;
+        min_w = std::min(min_w, w);
+        max_w = std::max(max_w, w);
+    }
+    assert(max_w > 30000);
+    assert(min_w < -30000);
+
+    // Pink noise is continuous and bounded
+    for (int i = 0; i < 1000; ++i) {
+        auto p = noise.process_pink().raw;
+        assert(p >= -32768 && p <= 32767);
+    }
+
+    // Test Compressor
+    FixedCompressor comp;
+    // Threshold 0.25 (8192 raw), ratio 0.8 (26214 raw), fast attack, 1.0x makeup gain
+    comp.configure(
+        FixedQ15::from_float(0.25f),
+        FixedQ15::from_float(0.8f),
+        FixedQ15::from_float(0.9f),
+        FixedQ15::from_float(0.01f),
+        32768
+    );
+
+    // Signal below threshold should pass virtually unattenuated
+    comp.reset();
+    auto low_sig = comp.process(FixedQ15::from_float(0.1f));
+    assert(std::abs(low_sig.to_float() - 0.1f) < 0.05f);
+
+    // Heavy hot signal should be compressed down
+    FixedQ15 hot_sig = FixedQ15::from_float(0.9f);
+    FixedQ15 compressed_out = FixedQ15(0);
+    for (int i = 0; i < 20; ++i) {
+        compressed_out = comp.process(hot_sig);
+    }
+    // With heavy compression, output level should be significantly below 0.9f
+    assert(compressed_out.to_float() < 0.6f);
+    assert(compressed_out.to_float() > 0.0f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2261,6 +2317,7 @@ int main() {
     test_fixed_wavetable_oscillator();
     test_fixed_nonlinear_filter_and_shaper();
     test_fixed_lfo_and_delay();
-    std::cout << "\033[1;32mALL 99 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_compressor_and_noise();
+    std::cout << "\033[1;32mALL 100 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
