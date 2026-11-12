@@ -43,6 +43,8 @@
 #include "aether/embedded/embedded_engine.hpp"
 #include "aether/embedded/daisy_patch.hpp"
 #include "aether/math/fixed_wavetable.hpp"
+#include "aether/math/fixed_filter.hpp"
+#include "aether/math/fixed_shaper.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2057,6 +2059,46 @@ void test_fixed_wavetable_oscillator() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_nonlinear_filter_and_shaper() {
+    std::cout << "[TEST] Embedded Fixed-Point Nonlinear Filter & Wavefolder... ";
+    using aether::math::FixedNonlinearFilter;
+    using aether::math::FixedNonlinearShaper;
+    using aether::math::FixedQ15;
+
+    // Filter test
+    FixedNonlinearFilter flt;
+    flt.configure(FixedQ15::from_float(0.2f), FixedQ15::from_float(0.85f));
+
+    // Impulse excitation
+    auto smp0 = flt.process(FixedQ15::from_float(0.9f));
+    assert(smp0.to_float() >= -1.0f && smp0.to_float() <= 1.0f);
+
+    // Resonant ring without exploding
+    for (int i = 0; i < 500; ++i) {
+        auto out = flt.process(FixedQ15(0));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    flt.reset();
+    auto silence = flt.process(FixedQ15(0));
+    assert(silence.raw == 0);
+
+    // Buchla-style Wavefolder test
+    FixedNonlinearShaper shaper;
+    // Drive 3.0x with 3 folds
+    shaper.configure(32768 * 3, 3);
+
+    // Positive peak folded back
+    auto folded_pos = shaper.process(FixedQ15::from_float(0.9f));
+    assert(folded_pos.to_float() >= -1.0f && folded_pos.to_float() <= 1.0f);
+
+    // Negative peak folded back
+    auto folded_neg = shaper.process(FixedQ15::from_float(-0.9f));
+    assert(folded_neg.to_float() >= -1.0f && folded_neg.to_float() <= 1.0f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2156,6 +2198,7 @@ int main() {
     test_embedded_polyphonic_engine();
     test_daisy_patch_eurorack();
     test_fixed_wavetable_oscillator();
-    std::cout << "\033[1;32mALL 97 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_nonlinear_filter_and_shaper();
+    std::cout << "\033[1;32mALL 98 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
