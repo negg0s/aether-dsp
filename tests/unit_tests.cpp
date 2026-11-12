@@ -64,6 +64,8 @@
 #include "aether/math/fixed_tremolo.hpp"
 #include "aether/math/fixed_transient_shaper.hpp"
 #include "aether/math/fixed_stereo_widener.hpp"
+#include "aether/math/fixed_pitch_detector.hpp"
+#include "aether/math/fixed_crossover.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2594,6 +2596,51 @@ void test_fixed_transient_and_widener() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_pitch_detector_and_crossover() {
+    std::cout << "[TEST] Embedded Fixed-Point AMDF Pitch Tracker & LR4 Crossover... ";
+    using aether::math::FixedPitchDetector;
+    using aether::math::FixedCrossover;
+    using aether::math::FixedQ15;
+
+    // Test Pitch Detector with periodic signal
+    FixedPitchDetector detector;
+    detector.reset();
+
+    // Feed a periodic square wave with period = 100 samples (~480 Hz)
+    for (int rep = 0; rep < 10; ++rep) {
+        for (int i = 0; i < 50; ++i) detector.push_sample(FixedQ15::from_float(0.8f));
+        for (int i = 0; i < 50; ++i) detector.push_sample(FixedQ15::from_float(-0.8f));
+    }
+
+    auto pitch = detector.analyze();
+    assert(pitch.voiced);
+    assert(std::abs(static_cast<int>(pitch.period_samples) - 100) <= 6); // within decimation tolerance
+    assert(pitch.confidence_q15 > 10000);
+
+    // Test LR4 Crossover
+    FixedCrossover xover;
+    xover.configure(FixedQ15::from_float(0.1f)); // ~1500 Hz split
+    xover.reset();
+
+    // Impulse
+    auto split0 = xover.process(FixedQ15::from_float(0.9f));
+    assert(split0.low.to_float() >= -1.0f && split0.low.to_float() <= 1.0f);
+    assert(split0.high.to_float() >= -1.0f && split0.high.to_float() <= 1.0f);
+
+    for (int i = 0; i < 500; ++i) {
+        auto s = xover.process(FixedQ15(0));
+        assert(s.low.to_float() >= -1.0f && s.low.to_float() <= 1.0f);
+        assert(s.high.to_float() >= -1.0f && s.high.to_float() <= 1.0f);
+    }
+
+    xover.reset();
+    auto x_silence = xover.process(FixedQ15(0));
+    assert(x_silence.low.raw == 0);
+    assert(x_silence.high.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2704,6 +2751,7 @@ int main() {
     test_fixed_pitch_shifter_and_gate();
     test_fixed_multitap_and_tremolo();
     test_fixed_transient_and_widener();
-    std::cout << "\033[1;32mALL 108 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_pitch_detector_and_crossover();
+    std::cout << "\033[1;32mALL 109 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
