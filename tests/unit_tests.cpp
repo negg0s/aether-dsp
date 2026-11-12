@@ -62,6 +62,8 @@
 #include "aether/math/fixed_gate.hpp"
 #include "aether/math/fixed_multitap.hpp"
 #include "aether/math/fixed_tremolo.hpp"
+#include "aether/math/fixed_transient_shaper.hpp"
+#include "aether/math/fixed_stereo_widener.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2544,6 +2546,54 @@ void test_fixed_multitap_and_tremolo() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_transient_and_widener() {
+    std::cout << "[TEST] Embedded Fixed-Point Transient Designer & Mid/Side Widener... ";
+    using aether::math::FixedTransientShaper;
+    using aether::math::FixedStereoWidener;
+    using aether::math::FixedQ15;
+
+    // Test Transient Designer
+    FixedTransientShaper ts;
+    // Boost attack +0.5, reduce sustain -0.3
+    ts.configure(FixedQ15::from_float(0.5f), FixedQ15::from_float(-0.3f));
+
+    // Sudden percussive transient impulse
+    auto t0 = ts.process(FixedQ15::from_float(0.9f));
+    assert(t0.to_float() >= -1.0f && t0.to_float() <= 1.0f);
+
+    for (int i = 0; i < 500; ++i) {
+        auto out = ts.process(FixedQ15::from_float(0.2f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    ts.reset();
+    auto ts_silence = ts.process(FixedQ15(0));
+    assert(ts_silence.raw == 0);
+
+    // Test Mid/Side Stereo Widener
+    FixedStereoWidener widener;
+    // 1.5x width expansion with bass mono filter
+    widener.configure(32768 + 16384, FixedQ15::from_float(0.2f));
+
+    FixedQ15 left_in = FixedQ15::from_float(0.6f);
+    FixedQ15 right_in = FixedQ15::from_float(-0.4f);
+
+    for (int i = 0; i < 100; ++i) {
+        auto out = widener.process(left_in, right_in);
+        assert(out.left.to_float() >= -1.0f && out.left.to_float() <= 1.0f);
+        assert(out.right.to_float() >= -1.0f && out.right.to_float() <= 1.0f);
+    }
+
+    // Pure mono input (left == right) should have zero side and pass through untouched
+    widener.reset();
+    FixedQ15 mono_in = FixedQ15::from_float(0.5f);
+    auto mono_out = widener.process(mono_in, mono_in);
+    assert(std::abs(mono_out.left.to_float() - 0.5f) < 0.01f);
+    assert(std::abs(mono_out.right.to_float() - 0.5f) < 0.01f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2653,6 +2703,7 @@ int main() {
     test_fixed_formant_and_exciter();
     test_fixed_pitch_shifter_and_gate();
     test_fixed_multitap_and_tremolo();
-    std::cout << "\033[1;32mALL 107 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_transient_and_widener();
+    std::cout << "\033[1;32mALL 108 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
