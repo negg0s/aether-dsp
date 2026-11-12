@@ -66,6 +66,8 @@
 #include "aether/math/fixed_stereo_widener.hpp"
 #include "aether/math/fixed_pitch_detector.hpp"
 #include "aether/math/fixed_crossover.hpp"
+#include "aether/math/fixed_eq.hpp"
+#include "aether/math/fixed_sub_synth.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2641,6 +2643,47 @@ void test_fixed_pitch_detector_and_crossover() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_eq_and_sub_synth() {
+    std::cout << "[TEST] Embedded Fixed-Point 3-Band Parametric EQ & Sub-Harmonic Synth... ";
+    using aether::math::FixedParametricEQ;
+    using aether::math::FixedSubHarmonicSynth;
+    using aether::math::FixedQ15;
+
+    // Test 3-Band Parametric EQ
+    FixedParametricEQ eq;
+    eq.configure_low_shelf(6);
+    eq.configure_mid_bell(-6);
+    eq.configure_high_shelf(6);
+
+    for (int i = 0; i < 500; ++i) {
+        auto out = eq.process(FixedQ15::from_float(0.7f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    eq.reset();
+    auto eq_silence = eq.process(FixedQ15(0));
+    assert(eq_silence.raw == 0);
+
+    // Test Sub-Harmonic Synth
+    FixedSubHarmonicSynth sub;
+    sub.configure(FixedQ15::from_float(0.8f), FixedQ15::from_float(1.0f), FixedQ15::from_float(0.1f));
+
+    // Feed alternating wave to trigger sub-octave divider
+    for (int cycle = 0; cycle < 100; ++cycle) {
+        for (int i = 0; i < 20; ++i) (void)sub.process(FixedQ15::from_float(0.6f));
+        for (int i = 0; i < 20; ++i) (void)sub.process(FixedQ15::from_float(-0.6f));
+    }
+
+    auto out_sub = sub.process(FixedQ15::from_float(0.5f));
+    assert(out_sub.to_float() >= -1.0f && out_sub.to_float() <= 1.0f);
+
+    sub.reset();
+    auto sub_silence = sub.process(FixedQ15(0));
+    assert(sub_silence.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2752,6 +2795,7 @@ int main() {
     test_fixed_multitap_and_tremolo();
     test_fixed_transient_and_widener();
     test_fixed_pitch_detector_and_crossover();
-    std::cout << "\033[1;32mALL 109 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_eq_and_sub_synth();
+    std::cout << "\033[1;32mALL 110 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
