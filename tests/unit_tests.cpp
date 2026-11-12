@@ -68,6 +68,8 @@
 #include "aether/math/fixed_crossover.hpp"
 #include "aether/math/fixed_eq.hpp"
 #include "aether/math/fixed_sub_synth.hpp"
+#include "aether/math/fixed_comb_chorus.hpp"
+#include "aether/math/fixed_tape_saturator.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2684,6 +2686,41 @@ void test_fixed_eq_and_sub_synth() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_comb_chorus_and_tape_saturator() {
+    std::cout << "[TEST] Embedded Fixed-Point 6-Stage Ensemble Chorus & Tape Saturator... ";
+    using aether::math::FixedCombChorus;
+    using aether::math::FixedTapeSaturator;
+    using aether::math::FixedQ15;
+
+    // Test 6-Stage Solina / Dimension D Ensemble Chorus
+    FixedCombChorus ensemble;
+    uint32_t rate_inc = static_cast<uint32_t>((1ULL << 32) / 48000); // 1 Hz sweep
+    ensemble.configure(rate_inc, 12, FixedQ15::from_float(0.6f));
+
+    for (int i = 0; i < 600; ++i) {
+        auto out = ensemble.process(FixedQ15::from_float(0.7f), FixedQ15::from_float(0.7f));
+        assert(out.left.to_float() >= -1.0f && out.left.to_float() <= 1.0f);
+        assert(out.right.to_float() >= -1.0f && out.right.to_float() <= 1.0f);
+    }
+
+    ensemble.reset();
+    auto e_silence = ensemble.process(FixedQ15(0), FixedQ15(0));
+    assert(e_silence.left.raw == 0 && e_silence.right.raw == 0);
+
+    // Test Analog Tape Saturator
+    FixedTapeSaturator tape;
+    tape.configure(32768 * 3, FixedQ15::from_float(0.7f), FixedQ15::from_float(1.0f));
+
+    auto t_hot = tape.process(FixedQ15::from_float(0.95f));
+    assert(t_hot.to_float() >= -1.0f && t_hot.to_float() <= 1.0f);
+
+    tape.reset();
+    auto t_silence = tape.process(FixedQ15(0));
+    assert(t_silence.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2796,6 +2833,7 @@ int main() {
     test_fixed_transient_and_widener();
     test_fixed_pitch_detector_and_crossover();
     test_fixed_eq_and_sub_synth();
-    std::cout << "\033[1;32mALL 110 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_comb_chorus_and_tape_saturator();
+    std::cout << "\033[1;32mALL 111 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
