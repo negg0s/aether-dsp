@@ -37,6 +37,8 @@
 #include "aether/math/fixed_point.hpp"
 #include "aether/math/fixed_biquad.hpp"
 #include "aether/math/fixed_oscillator.hpp"
+#include "aether/math/fixed_envelope.hpp"
+#include "aether/embedded/embedded_voice.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -1866,6 +1868,47 @@ void test_fixed_biquad_and_oscillator() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_envelope_and_embedded_voice() {
+    std::cout << "[TEST] Embedded Fixed ADSR Envelope & Synth Voice Core... ";
+    using aether::math::FixedADSREnvelope;
+    using aether::math::FixedQ15;
+    using aether::embedded::EmbeddedVoice;
+
+    FixedADSREnvelope env;
+    env.configure(10, 20, FixedQ15::from_float(0.5f), 30);
+    env.gate(true);
+
+    assert(env.is_active());
+    for (int i = 0; i < 15; ++i) {
+        auto val = env.process();
+        assert(val.to_float() >= 0.0f && val.to_float() <= 1.0f);
+    }
+
+    env.gate(false);
+    for (int i = 0; i < 50; ++i) {
+        (void)env.process();
+    }
+    assert(!env.is_active());
+
+    // Embedded Voice integration
+    EmbeddedVoice voice;
+    voice.note_on(523.25f); // C5
+    assert(voice.is_active());
+
+    for (int i = 0; i < 500; ++i) {
+        auto smp = voice.process();
+        assert(smp.to_float() >= -1.0f && smp.to_float() <= 1.0f);
+    }
+
+    voice.note_off();
+    for (int i = 0; i < 15000; ++i) {
+        (void)voice.process();
+    }
+    assert(!voice.is_active());
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1960,6 +2003,7 @@ int main() {
     test_embedded_hardware_adapter();
     test_simd_neon_math();
     test_fixed_biquad_and_oscillator();
-    std::cout << "\033[1;32mALL 92 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_envelope_and_embedded_voice();
+    std::cout << "\033[1;32mALL 93 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
