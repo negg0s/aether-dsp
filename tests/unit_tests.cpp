@@ -34,6 +34,9 @@
 #include "aether/math/bolza_surface.hpp"
 #include "aether/dsp/fx/partitioned_convolution.hpp"
 #include "aether/engine.hpp"
+#include "aether/math/fixed_point.hpp"
+#include "aether/simd/neon_math.hpp"
+#include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
@@ -1762,6 +1765,82 @@ void test_hyperbolic_waveguide_nan_resilience() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_point_embedded() {
+    std::cout << "[TEST] Embedded Fixed-Point Math (Q15 / Q27)... ";
+    using aether::math::FixedQ15;
+    using aether::math::FixedQ27;
+
+    // Q15 tests
+    auto q1 = FixedQ15::from_float(0.5f);
+    auto q2 = FixedQ15::from_float(0.25f);
+    auto q_sum = q1 + q2;
+    assert(std::abs(q_sum.to_float() - 0.75f) < 0.001f);
+
+    auto q_prod = q1 * q2;
+    assert(std::abs(q_prod.to_float() - 0.125f) < 0.001f);
+
+    // Q15 saturation
+    auto q_sat = FixedQ15::from_float(0.9f) + FixedQ15::from_float(0.9f);
+    assert(q_sat.raw == 32767);
+
+    // Q27 tests
+    auto q27_1 = FixedQ27::from_float(1.5f);
+    auto q27_2 = FixedQ27::from_float(2.0f);
+    auto q27_prod = q27_1 * q27_2;
+    assert(std::abs(q27_prod.to_float() - 3.0f) < 0.0001f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_embedded_hardware_adapter() {
+    std::cout << "[TEST] Embedded Hardware Knob/Button Adapter... ";
+    aether::Engine engine;
+    aether::embedded::EmbeddedHardwareAdapter adapter;
+
+    // Turn knob 0 (preset) to max ADC (4095) -> Preset 13
+    adapter.update_adc_knob(0, 4095, engine);
+    assert(static_cast<int>(engine.current_preset()) == 13);
+
+    // Turn knob 0 to 0 -> Preset 0
+    adapter.update_adc_knob(0, 0, engine);
+    assert(static_cast<int>(engine.current_preset()) == 0);
+
+    // Knob 4 (panning)
+    adapter.update_adc_knob(4, 2048, engine); // ~ 0.0 deg
+    assert(std::abs(adapter.knob_value(4)) < 2.0f);
+
+    // Button 2 (next preset)
+    adapter.handle_button_press(2, true, engine);
+    assert(static_cast<int>(engine.current_preset()) == 1);
+    adapter.handle_button_press(2, false, engine);
+
+    // Button 3 (reset)
+    adapter.handle_button_press(3, true, engine);
+    adapter.handle_button_press(3, false, engine);
+
+    std::cout << "PASSED\n";
+}
+
+void test_simd_neon_math() {
+    std::cout << "[TEST] Portable SIMD Float4 Math... ";
+    using aether::simd::Float4;
+
+    Float4 a(1.0f, 2.0f, 3.0f, 4.0f);
+    Float4 b(0.5f, 0.5f, 0.5f, 0.5f);
+    Float4 c = a + b;
+    alignas(16) float res[4];
+    c.store(res);
+    assert(std::abs(res[0] - 1.5f) < 1e-6f);
+    assert(std::abs(res[3] - 4.5f) < 1e-6f);
+
+    Float4 d = a.fma(b, Float4(10.0f));
+    d.store(res);
+    assert(std::abs(res[0] - 10.5f) < 1e-6f);
+    assert(std::abs(res[3] - 12.0f) < 1e-6f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1852,6 +1931,9 @@ int main() {
     test_hyperbolic_spatializer_3d_nan_resilience();
     test_binaural_panner_nan_resilience();
     test_hyperbolic_waveguide_nan_resilience();
-    std::cout << "\033[1;32mALL 88 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_point_embedded();
+    test_embedded_hardware_adapter();
+    test_simd_neon_math();
+    std::cout << "\033[1;32mALL 91 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

@@ -457,6 +457,8 @@ public:
     [[nodiscard]] const dsp::ADSREnvelope& envelope() const noexcept { return env_; }
     [[nodiscard]] dsp::fx::HyperbolicReverb& reverb() noexcept { return reverb_; }
     [[nodiscard]] uint32_t sample_rate() const noexcept { return sample_rate_; }
+    [[nodiscard]] Preset current_preset() const noexcept { return current_preset_; }
+    void set_preset(Preset preset) noexcept { load_preset(preset); }
 
 private:
     uint32_t sample_rate_{DEFAULT_SAMPLE_RATE};
