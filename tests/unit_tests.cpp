@@ -60,6 +60,8 @@
 #include "aether/math/fixed_exciter.hpp"
 #include "aether/math/fixed_pitch_shifter.hpp"
 #include "aether/math/fixed_gate.hpp"
+#include "aether/math/fixed_multitap.hpp"
+#include "aether/math/fixed_tremolo.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2498,6 +2500,50 @@ void test_fixed_pitch_shifter_and_gate() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_multitap_and_tremolo() {
+    std::cout << "[TEST] Embedded Fixed-Point 4-Tap Delay & Optical AutoPan Tremolo... ";
+    using aether::math::FixedMultiTapDelay;
+    using aether::math::FixedTremolo;
+    using aether::math::FixedQ15;
+
+    // Test Multi-Tap Delay
+    FixedMultiTapDelay mtd;
+    mtd.set_tap(0, 100, FixedQ15::from_float(0.8f), -30000); // hard left
+    mtd.set_tap(1, 200, FixedQ15::from_float(0.6f),  30000); // hard right
+    mtd.set_feedback(FixedQ15::from_float(0.3f));
+
+    // Impulse
+    auto d0 = mtd.process(FixedQ15::from_float(0.9f));
+    assert(d0.left.raw == 0 && d0.right.raw == 0);
+
+    for (int i = 0; i < 500; ++i) {
+        auto out = mtd.process(FixedQ15(0));
+        assert(out.left.to_float() >= -1.0f && out.left.to_float() <= 1.0f);
+        assert(out.right.to_float() >= -1.0f && out.right.to_float() <= 1.0f);
+    }
+
+    mtd.reset();
+    auto d_silence = mtd.process(FixedQ15(0));
+    assert(d_silence.left.raw == 0 && d_silence.right.raw == 0);
+
+    // Test Optical Tremolo / AutoPan
+    FixedTremolo trem;
+    uint32_t rate_inc = static_cast<uint32_t>((4ULL << 32) / 48000); // 4 Hz
+    trem.configure(rate_inc, FixedQ15::from_float(0.8f), FixedTremolo::Mode::AutoPan);
+
+    for (int i = 0; i < 1000; ++i) {
+        auto t_out = trem.process(FixedQ15::from_float(0.7f), FixedQ15::from_float(0.7f));
+        assert(t_out.left.to_float() >= -1.0f && t_out.left.to_float() <= 1.0f);
+        assert(t_out.right.to_float() >= -1.0f && t_out.right.to_float() <= 1.0f);
+    }
+
+    trem.reset();
+    auto t_silence = trem.process(FixedQ15(0), FixedQ15(0));
+    assert(t_silence.left.raw == 0 && t_silence.right.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2606,6 +2652,7 @@ int main() {
     test_fixed_phaser_and_clipper();
     test_fixed_formant_and_exciter();
     test_fixed_pitch_shifter_and_gate();
-    std::cout << "\033[1;32mALL 106 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_multitap_and_tremolo();
+    std::cout << "\033[1;32mALL 107 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
