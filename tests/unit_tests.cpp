@@ -52,6 +52,8 @@
 #include "aether/math/fixed_chorus.hpp"
 #include "aether/math/fixed_ring_mod.hpp"
 #include "aether/math/fixed_comb.hpp"
+#include "aether/math/fixed_svf.hpp"
+#include "aether/math/fixed_bitcrusher.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2293,6 +2295,59 @@ void test_fixed_ring_mod_and_comb() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_svf_and_bitcrusher() {
+    std::cout << "[TEST] Embedded Fixed-Point Chamberlin SVF & Bitcrusher... ";
+    using aether::math::FixedStateVariableFilter;
+    using aether::math::FixedBitcrusher;
+    using aether::math::FixedQ15;
+
+    // Test SVF
+    FixedStateVariableFilter svf;
+    // f = ~1000 Hz, Q ~ 2.0 (q_inv = 16384)
+    svf.configure(FixedQ15::from_float(0.15f), FixedQ15::from_float(0.5f));
+
+    // Impulse
+    auto out0 = svf.process(FixedQ15::from_float(0.9f));
+    assert(out0.lowpass.to_float() >= -1.0f && out0.lowpass.to_float() <= 1.0f);
+    assert(out0.highpass.to_float() >= -1.0f && out0.highpass.to_float() <= 1.0f);
+    assert(out0.bandpass.to_float() >= -1.0f && out0.bandpass.to_float() <= 1.0f);
+    assert(out0.notch.to_float() >= -1.0f && out0.notch.to_float() <= 1.0f);
+
+    // Resonant ring for 500 samples
+    for (int i = 0; i < 500; ++i) {
+        auto out = svf.process(FixedQ15(0));
+        assert(out.lowpass.to_float() >= -1.0f && out.lowpass.to_float() <= 1.0f);
+        assert(out.highpass.to_float() >= -1.0f && out.highpass.to_float() <= 1.0f);
+    }
+
+    svf.reset();
+    auto reset_out = svf.process(FixedQ15(0));
+    assert(reset_out.lowpass.raw == 0);
+    assert(reset_out.highpass.raw == 0);
+
+    // Test Bitcrusher
+    FixedBitcrusher bc;
+    // 8-bit reduction, 4x sample rate decimation
+    bc.configure(8, 4);
+
+    FixedQ15 in_val = FixedQ15::from_float(0.735f);
+    auto bc0 = bc.process(in_val);
+    auto bc1 = bc.process(FixedQ15::from_float(0.2f));
+    auto bc2 = bc.process(FixedQ15::from_float(-0.4f));
+    auto bc3 = bc.process(FixedQ15::from_float(0.9f));
+
+    // bc0, bc1, bc2, bc3 should hold bc0 value due to 4x decimation
+    assert(bc0.raw == bc1.raw);
+    assert(bc0.raw == bc2.raw);
+    assert(bc0.raw == bc3.raw);
+
+    // Next sample must update
+    auto bc4 = bc.process(FixedQ15::from_float(-0.5f));
+    assert(bc4.raw != bc0.raw);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2397,6 +2452,7 @@ int main() {
     test_fixed_compressor_and_noise();
     test_fixed_stereo_chorus();
     test_fixed_ring_mod_and_comb();
-    std::cout << "\033[1;32mALL 102 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_svf_and_bitcrusher();
+    std::cout << "\033[1;32mALL 103 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
