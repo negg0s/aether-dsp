@@ -45,6 +45,8 @@
 #include "aether/math/fixed_wavetable.hpp"
 #include "aether/math/fixed_filter.hpp"
 #include "aether/math/fixed_shaper.hpp"
+#include "aether/math/fixed_lfo.hpp"
+#include "aether/math/fixed_delay.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2099,6 +2101,65 @@ void test_fixed_nonlinear_filter_and_shaper() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_lfo_and_delay() {
+    std::cout << "[TEST] Embedded Fixed-Point Multi-Waveform LFO & Delay Line... ";
+    using aether::math::FixedLfo;
+    using aether::math::FixedDelay;
+    using aether::math::FixedQ15;
+
+    // Test LFO Waveforms
+    FixedLfo lfo;
+    lfo.set_frequency(5.0f, 48000);
+
+    // Sine waveform
+    lfo.set_waveform(FixedLfo::Waveform::Sine);
+    int16_t max_s = -32768, min_s = 32767;
+    for (int i = 0; i < 9600; ++i) {
+        auto val = lfo.process().raw;
+        max_s = std::max(max_s, val);
+        min_s = std::min(min_s, val);
+    }
+    assert(max_s > 30000);
+    assert(min_s < -30000);
+
+    // Triangle waveform
+    lfo.set_waveform(FixedLfo::Waveform::Triangle);
+    auto val_tri = lfo.process().raw;
+    assert(val_tri >= -32768 && val_tri <= 32767);
+
+    // Square waveform (must be strictly bipolar max)
+    lfo.set_waveform(FixedLfo::Waveform::Square);
+    auto sq = lfo.process().raw;
+    assert(sq == 32767 || sq == -32768);
+
+    // Sample & Hold waveform
+    lfo.set_waveform(FixedLfo::Waveform::SampleAndHold);
+    auto sh = lfo.process().raw;
+    assert(sh >= -32768 && sh <= 32767);
+
+    // Test FixedDelay
+    FixedDelay delay;
+    // Delay 100 samples, 50% feedback, 100% wet
+    delay.configure(100, FixedQ15::from_float(0.5f), FixedQ15::from_float(1.0f));
+
+    // Impulse
+    auto d0 = delay.process(FixedQ15::from_float(0.8f));
+    assert(d0.raw == 0); // initial silence before delay line outputs
+
+    // Read back after 99 samples
+    for (int i = 0; i < 99; ++i) {
+        (void)delay.process(FixedQ15(0));
+    }
+    auto d_echo = delay.process(FixedQ15(0));
+    assert(std::abs(d_echo.to_float() - 0.8f) < 0.05f);
+
+    delay.reset();
+    auto reset_val = delay.process(FixedQ15(0));
+    assert(reset_val.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2199,6 +2260,7 @@ int main() {
     test_daisy_patch_eurorack();
     test_fixed_wavetable_oscillator();
     test_fixed_nonlinear_filter_and_shaper();
-    std::cout << "\033[1;32mALL 98 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_lfo_and_delay();
+    std::cout << "\033[1;32mALL 99 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
