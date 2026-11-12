@@ -50,6 +50,8 @@
 #include "aether/math/fixed_compressor.hpp"
 #include "aether/math/fixed_noise.hpp"
 #include "aether/math/fixed_chorus.hpp"
+#include "aether/math/fixed_ring_mod.hpp"
+#include "aether/math/fixed_comb.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2247,6 +2249,50 @@ void test_fixed_stereo_chorus() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_ring_mod_and_comb() {
+    std::cout << "[TEST] Embedded Fixed-Point Ring Modulator & Acoustic Resonator... ";
+    using aether::math::FixedRingModulator;
+    using aether::math::FixedAcousticResonator;
+    using aether::math::FixedQ15;
+
+    // Test Ring Modulator
+    FixedRingModulator rm;
+    rm.set_carrier_frequency(440.0f, 48000);
+    rm.configure(FixedQ15::from_float(1.0f), 2000); // 100% wet, 2000 deadzone
+
+    // Processing bounded input
+    for (int i = 0; i < 480; ++i) {
+        auto out = rm.process(FixedQ15::from_float(0.8f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    rm.reset();
+    auto rm_silence = rm.process(FixedQ15(0));
+    assert(rm_silence.raw == 0);
+
+    // Test Karplus-Strong / Physical Modeling Comb Resonator
+    FixedAcousticResonator comb;
+    // 108 samples delay corresponds to ~444.4 Hz at 48 kHz
+    comb.configure(108, FixedQ15::from_float(0.98f), FixedQ15::from_float(0.3f));
+
+    // Excite string with single impulse
+    auto c0 = comb.process(FixedQ15::from_float(0.95f));
+    assert(c0.raw == 0); // initial silence until line recirculates
+
+    int32_t peak_decay = 0;
+    for (int i = 0; i < 2000; ++i) {
+        int32_t val = comb.process(FixedQ15(0)).raw;
+        peak_decay = std::max(peak_decay, std::abs(val));
+    }
+    assert(peak_decay > 10000); // ringing acoustic resonance
+
+    comb.reset();
+    auto reset_comb = comb.process(FixedQ15(0));
+    assert(reset_comb.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2350,6 +2396,7 @@ int main() {
     test_fixed_lfo_and_delay();
     test_fixed_compressor_and_noise();
     test_fixed_stereo_chorus();
-    std::cout << "\033[1;32mALL 101 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_ring_mod_and_comb();
+    std::cout << "\033[1;32mALL 102 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
