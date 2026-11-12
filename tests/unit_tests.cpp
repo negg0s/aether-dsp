@@ -54,6 +54,8 @@
 #include "aether/math/fixed_comb.hpp"
 #include "aether/math/fixed_svf.hpp"
 #include "aether/math/fixed_bitcrusher.hpp"
+#include "aether/math/fixed_phaser.hpp"
+#include "aether/math/fixed_clipper.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2348,6 +2350,49 @@ void test_fixed_svf_and_bitcrusher() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_phaser_and_clipper() {
+    std::cout << "[TEST] Embedded Fixed-Point 4-Stage Phaser & Asymmetric Diode Clipper... ";
+    using aether::math::FixedAllpassPhaser;
+    using aether::math::FixedClipper;
+    using aether::math::FixedQ15;
+
+    // Test 4-stage Phaser
+    FixedAllpassPhaser phaser;
+    uint32_t rate_inc = static_cast<uint32_t>((2ULL << 32) / 48000); // 2 Hz sweep
+    phaser.configure(
+        rate_inc,
+        FixedQ15::from_float(0.15f),
+        FixedQ15::from_float(0.75f),
+        FixedQ15::from_float(0.6f),
+        FixedQ15::from_float(0.5f)
+    );
+
+    // Run over 500 samples
+    for (int i = 0; i < 500; ++i) {
+        auto out = phaser.process(FixedQ15::from_float(0.7f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    phaser.reset();
+    auto p_silence = phaser.process(FixedQ15(0));
+    assert(p_silence.raw == 0);
+
+    // Test Asymmetric Clipper
+    FixedClipper clipper;
+    // Drive 3.0x with positive bias for 2nd harmonic richness
+    clipper.configure(32768 * 3, 4000);
+
+    auto sat_pos = clipper.process(FixedQ15::from_float(0.8f));
+    auto sat_neg = clipper.process(FixedQ15::from_float(-0.8f));
+
+    assert(sat_pos.to_float() >= -1.0f && sat_pos.to_float() <= 1.0f);
+    assert(sat_neg.to_float() >= -1.0f && sat_neg.to_float() <= 1.0f);
+    // Asymmetric clipping generates unequal magnitude peaks
+    assert(sat_pos.raw != -sat_neg.raw);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2453,6 +2498,7 @@ int main() {
     test_fixed_stereo_chorus();
     test_fixed_ring_mod_and_comb();
     test_fixed_svf_and_bitcrusher();
-    std::cout << "\033[1;32mALL 103 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_phaser_and_clipper();
+    std::cout << "\033[1;32mALL 104 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
