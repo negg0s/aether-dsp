@@ -35,6 +35,8 @@
 #include "aether/dsp/fx/partitioned_convolution.hpp"
 #include "aether/engine.hpp"
 #include "aether/math/fixed_point.hpp"
+#include "aether/math/fixed_biquad.hpp"
+#include "aether/math/fixed_oscillator.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -1841,6 +1843,29 @@ void test_simd_neon_math() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_biquad_and_oscillator() {
+    std::cout << "[TEST] Embedded Fixed-Point Biquad & Sine LUT Oscillator... ";
+    using aether::math::FixedBiquadFilter;
+    using aether::math::FixedSineOscillator;
+    using aether::math::FixedQ15;
+
+    FixedSineOscillator osc;
+    osc.set_normalized_frequency(440.0f / 48000.0f); // ~440Hz at 48kHz
+
+    FixedBiquadFilter filter;
+    filter.configure_lowpass(1000.0f / 48000.0f, 0.707f);
+
+    for (int i = 0; i < 200; ++i) {
+        FixedQ15 smp = osc.step();
+        assert(smp.to_float() >= -1.0f && smp.to_float() <= 1.0f);
+
+        FixedQ15 filtered = filter.process(smp);
+        assert(filtered.to_float() >= -1.0f && filtered.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -1934,6 +1959,7 @@ int main() {
     test_fixed_point_embedded();
     test_embedded_hardware_adapter();
     test_simd_neon_math();
-    std::cout << "\033[1;32mALL 91 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_biquad_and_oscillator();
+    std::cout << "\033[1;32mALL 92 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
