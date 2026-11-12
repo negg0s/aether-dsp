@@ -27,6 +27,10 @@ public:
         return static_cast<float>(raw) / 32768.0f;
     }
 
+    constexpr FixedQ15 operator-() const noexcept {
+        return FixedQ15(static_cast<int16_t>(raw == -32768 ? 32767 : -raw));
+    }
+
     constexpr FixedQ15 operator+(FixedQ15 other) const noexcept {
         const int32_t sum = static_cast<int32_t>(raw) + static_cast<int32_t>(other.raw);
         return FixedQ15(static_cast<int16_t>(std::clamp<int32_t>(sum, -32768, 32767)));

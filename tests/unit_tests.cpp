@@ -38,6 +38,7 @@
 #include "aether/math/fixed_biquad.hpp"
 #include "aether/math/fixed_oscillator.hpp"
 #include "aether/math/fixed_envelope.hpp"
+#include "aether/math/fixed_reverb.hpp"
 #include "aether/embedded/embedded_voice.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
@@ -1909,6 +1910,31 @@ void test_fixed_envelope_and_embedded_voice() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_reverb() {
+    std::cout << "[TEST] Embedded Fixed-Point Freeverb Engine... ";
+    using aether::math::FixedReverb;
+    using aether::math::FixedQ15;
+
+    FixedReverb rev;
+    rev.configure(0.8f, 0.25f, 0.4f);
+
+    // Feed impulse
+    auto out0 = rev.process(FixedQ15::from_float(0.9f));
+    assert(out0.to_float() >= -1.0f && out0.to_float() <= 1.0f);
+
+    // Process tail
+    for (int i = 0; i < 3000; ++i) {
+        auto tail = rev.process(FixedQ15(0));
+        assert(tail.to_float() >= -1.0f && tail.to_float() <= 1.0f);
+    }
+
+    rev.reset();
+    auto silence = rev.process(FixedQ15(0));
+    assert(silence.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2004,6 +2030,7 @@ int main() {
     test_simd_neon_math();
     test_fixed_biquad_and_oscillator();
     test_fixed_envelope_and_embedded_voice();
-    std::cout << "\033[1;32mALL 93 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_reverb();
+    std::cout << "\033[1;32mALL 94 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
