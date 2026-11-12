@@ -18,6 +18,10 @@ public:
     constexpr FixedQ15() noexcept = default;
     constexpr explicit FixedQ15(int16_t v) noexcept : raw(v) {}
 
+    static constexpr FixedQ15 from_raw(int16_t v) noexcept {
+        return FixedQ15(v);
+    }
+
     static constexpr FixedQ15 from_float(float f) noexcept {
         f = std::clamp(f, -1.0f, 0.999969f);
         return FixedQ15(static_cast<int16_t>(std::round(f * 32768.0f)));

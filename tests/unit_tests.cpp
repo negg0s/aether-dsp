@@ -41,6 +41,8 @@
 #include "aether/math/fixed_reverb.hpp"
 #include "aether/embedded/embedded_voice.hpp"
 #include "aether/embedded/embedded_engine.hpp"
+#include "aether/embedded/daisy_patch.hpp"
+#include "aether/math/fixed_wavetable.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -1968,6 +1970,93 @@ void test_embedded_polyphonic_engine() {
     std::cout << "PASSED\n";
 }
 
+void test_daisy_patch_eurorack() {
+    std::cout << "[TEST] Embedded Daisy Patch Eurorack Interface & 1V/Oct... ";
+    using aether::embedded::DaisyPatchEurorackInterface;
+    using aether::math::FixedQ15;
+
+    DaisyPatchEurorackInterface patch(48000);
+
+    // Initial state
+    assert(patch.get_cv(0).raw == 0);
+    assert(!patch.gate_in(0));
+
+    // Gate rising and falling edge detection
+    patch.set_gate_in(0, true);
+    assert(patch.gate_in(0));
+    assert(patch.gate_in_rose(0));
+    assert(!patch.gate_in_fell(0));
+
+    // Next step: high remains high, rising edge clears
+    patch.set_gate_in(0, true);
+    assert(!patch.gate_in_rose(0));
+
+    // Falling edge
+    patch.set_gate_in(0, false);
+    assert(!patch.gate_in(0));
+    assert(patch.gate_in_fell(0));
+    assert(!patch.gate_in_rose(0));
+
+    // 1V/Octave CV pitch tracking
+    // 0V (raw = 0) -> A4 (440 Hz)
+    // 440 * 2^32 / 48000 = 39370533
+    uint32_t inc_0v = patch.cv_to_phase_increment(FixedQ15(0));
+    assert(inc_0v > 39000000 && inc_0v < 40000000);
+
+    // +1V in 5V range: cv = 1/5 = 0.2 -> 1 octave up (880 Hz -> double increment)
+    // 0.2 * 32768 = 6554 raw
+    uint32_t inc_plus1v = patch.cv_to_phase_increment(FixedQ15::from_raw(6554));
+    float ratio_up = static_cast<float>(inc_plus1v) / static_cast<float>(inc_0v);
+    assert(std::abs(ratio_up - 2.0f) < 0.05f);
+
+    // -1V in 5V range: cv = -0.2 -> 1 octave down (220 Hz -> half increment)
+    uint32_t inc_minus1v = patch.cv_to_phase_increment(FixedQ15::from_raw(-6554));
+    float ratio_down = static_cast<float>(inc_minus1v) / static_cast<float>(inc_0v);
+    assert(std::abs(ratio_down - 0.5f) < 0.05f);
+
+    // CV output roundtrip
+    patch.set_cv_out(2, FixedQ15::from_float(0.75f));
+    assert(std::abs(patch.cv_out(2).to_float() - 0.75f) < 0.01f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_fixed_wavetable_oscillator() {
+    std::cout << "[TEST] Embedded Fixed-Point Dual Wavetable Oscillator... ";
+    using aether::math::FixedWavetableOscillator;
+    using aether::math::FixedQ15;
+
+    FixedWavetableOscillator osc;
+    // Set frequency to 440 Hz at 48000 Hz sample rate
+    uint32_t inc = static_cast<uint32_t>((440ULL << 32) / 48000);
+    osc.set_phase_increment(inc);
+
+    // Pure Sine Table (morph = 0)
+    osc.set_morph(FixedQ15(0));
+    osc.reset_phase();
+    int16_t max_val = 0;
+    int16_t min_val = 0;
+    for (int i = 0; i < 480; ++i) {
+        auto val = osc.process_sample().raw;
+        max_val = std::max(max_val, val);
+        min_val = std::min(min_val, val);
+    }
+    assert(max_val > 30000);
+    assert(min_val < -30000);
+
+    // Morphed Hyperbolic wave (morph = 1.0)
+    osc.set_morph(FixedQ15::from_float(1.0f));
+    osc.reset_phase();
+    int16_t max_morphed = 0;
+    for (int i = 0; i < 480; ++i) {
+        auto val = osc.process_sample().raw;
+        max_morphed = std::max(max_morphed, val);
+    }
+    assert(max_morphed > 30000);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2065,6 +2154,8 @@ int main() {
     test_fixed_envelope_and_embedded_voice();
     test_fixed_reverb();
     test_embedded_polyphonic_engine();
-    std::cout << "\033[1;32mALL 95 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_daisy_patch_eurorack();
+    test_fixed_wavetable_oscillator();
+    std::cout << "\033[1;32mALL 97 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
