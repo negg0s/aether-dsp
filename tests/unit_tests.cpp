@@ -49,6 +49,7 @@
 #include "aether/math/fixed_delay.hpp"
 #include "aether/math/fixed_compressor.hpp"
 #include "aether/math/fixed_noise.hpp"
+#include "aether/math/fixed_chorus.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2216,6 +2217,36 @@ void test_fixed_compressor_and_noise() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_stereo_chorus() {
+    std::cout << "[TEST] Embedded Fixed-Point Stereo Chorus & Modulated Delay... ";
+    using aether::math::FixedChorus;
+    using aether::math::FixedQ15;
+
+    FixedChorus chorus;
+    // Configure base delay = 48 samples (~1ms), depth = 24 samples, rate ~1Hz
+    uint32_t rate_inc = static_cast<uint32_t>((1ULL << 32) / 48000);
+    chorus.configure(48, 24, rate_inc, FixedQ15::from_float(0.25f), FixedQ15::from_float(0.5f));
+
+    // Impulse
+    auto out0 = chorus.process(FixedQ15::from_float(0.9f), FixedQ15::from_float(0.9f));
+    assert(out0.left.to_float() >= -1.0f && out0.left.to_float() <= 1.0f);
+    assert(out0.right.to_float() >= -1.0f && out0.right.to_float() <= 1.0f);
+
+    // Continuous processing over a full LFO cycle
+    for (int i = 0; i < 48000; ++i) {
+        auto out = chorus.process(FixedQ15(0), FixedQ15(0));
+        assert(out.left.to_float() >= -1.0f && out.left.to_float() <= 1.0f);
+        assert(out.right.to_float() >= -1.0f && out.right.to_float() <= 1.0f);
+    }
+
+    chorus.reset();
+    auto reset_out = chorus.process(FixedQ15(0), FixedQ15(0));
+    assert(reset_out.left.raw == 0);
+    assert(reset_out.right.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2318,6 +2349,7 @@ int main() {
     test_fixed_nonlinear_filter_and_shaper();
     test_fixed_lfo_and_delay();
     test_fixed_compressor_and_noise();
-    std::cout << "\033[1;32mALL 100 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_stereo_chorus();
+    std::cout << "\033[1;32mALL 101 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
