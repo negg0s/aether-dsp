@@ -58,6 +58,8 @@
 #include "aether/math/fixed_clipper.hpp"
 #include "aether/math/fixed_formant.hpp"
 #include "aether/math/fixed_exciter.hpp"
+#include "aether/math/fixed_pitch_shifter.hpp"
+#include "aether/math/fixed_gate.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2433,6 +2435,69 @@ void test_fixed_formant_and_exciter() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_pitch_shifter_and_gate() {
+    std::cout << "[TEST] Embedded Fixed-Point Pitch Shifter & Hysteresis Noise Gate... ";
+    using aether::math::FixedPitchShifter;
+    using aether::math::FixedGate;
+    using aether::math::FixedQ15;
+
+    // Test Granular Pitch Shifter
+    FixedPitchShifter ps;
+    ps.set_shift_semitones(7); // +7 semitones (perfect fifth up)
+
+    for (int i = 0; i < 1000; ++i) {
+        auto out = ps.process(FixedQ15::from_float(0.8f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    ps.set_shift_semitones(-12); // -12 semitones (one octave down)
+    for (int i = 0; i < 1000; ++i) {
+        auto out = ps.process(FixedQ15::from_float(0.5f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    ps.reset();
+    auto p_silence = ps.process(FixedQ15(0));
+    assert(p_silence.raw == 0);
+
+    // Test Noise Gate with Hysteresis
+    FixedGate gate;
+    // Open at 0.3 (9830 raw), close at 0.15 (4915 raw), fast attack, zero floor
+    gate.configure(
+        FixedQ15::from_float(0.3f),
+        FixedQ15::from_float(0.15f),
+        FixedQ15::from_float(0.9f),
+        FixedQ15::from_float(0.1f),
+        FixedQ15(0)
+    );
+
+    gate.reset();
+    // Sub-threshold noise should be gated shut
+    for (int i = 0; i < 20; ++i) {
+        auto g_out = gate.process(FixedQ15::from_float(0.05f));
+        assert(g_out.to_float() < 0.01f);
+    }
+    assert(!gate.is_open());
+
+    // Signal exceeding open threshold opens gate
+    for (int i = 0; i < 20; ++i) {
+        (void)gate.process(FixedQ15::from_float(0.8f));
+    }
+    assert(gate.is_open());
+
+    // Falling below open threshold but above close threshold stays open (hysteresis)
+    (void)gate.process(FixedQ15::from_float(0.2f));
+    assert(gate.is_open());
+
+    // Falling below close threshold shuts gate
+    for (int i = 0; i < 100; ++i) {
+        (void)gate.process(FixedQ15::from_float(0.02f));
+    }
+    assert(!gate.is_open());
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2540,6 +2605,7 @@ int main() {
     test_fixed_svf_and_bitcrusher();
     test_fixed_phaser_and_clipper();
     test_fixed_formant_and_exciter();
-    std::cout << "\033[1;32mALL 105 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_pitch_shifter_and_gate();
+    std::cout << "\033[1;32mALL 106 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
