@@ -40,6 +40,7 @@
 #include "aether/math/fixed_envelope.hpp"
 #include "aether/math/fixed_reverb.hpp"
 #include "aether/embedded/embedded_voice.hpp"
+#include "aether/embedded/embedded_engine.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -1935,6 +1936,38 @@ void test_fixed_reverb() {
     std::cout << "PASSED\n";
 }
 
+void test_embedded_polyphonic_engine() {
+    std::cout << "[TEST] Embedded Polyphonic Synthesizer Engine (4 Voices)... ";
+    using aether::embedded::EmbeddedEngine;
+
+    EmbeddedEngine engine;
+    assert(engine.active_voice_count() == 0);
+
+    // Play C-major chord (MIDI 60, 64, 67, 71)
+    engine.note_on(60);
+    engine.note_on(64);
+    engine.note_on(67);
+    engine.note_on(71);
+    assert(engine.active_voice_count() == 4);
+
+    for (int i = 0; i < 200; ++i) {
+        auto smp = engine.process();
+        assert(smp.to_float() >= -1.0f && smp.to_float() <= 1.0f);
+    }
+
+    // Trigger 5th note (steals LRU voice)
+    engine.note_on(72);
+    assert(engine.active_voice_count() == 4);
+
+    engine.all_notes_off();
+    for (int i = 0; i < 15000; ++i) {
+        (void)engine.process();
+    }
+    assert(engine.active_voice_count() == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2031,6 +2064,7 @@ int main() {
     test_fixed_biquad_and_oscillator();
     test_fixed_envelope_and_embedded_voice();
     test_fixed_reverb();
-    std::cout << "\033[1;32mALL 94 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_embedded_polyphonic_engine();
+    std::cout << "\033[1;32mALL 95 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
