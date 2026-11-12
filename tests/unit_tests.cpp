@@ -56,6 +56,8 @@
 #include "aether/math/fixed_bitcrusher.hpp"
 #include "aether/math/fixed_phaser.hpp"
 #include "aether/math/fixed_clipper.hpp"
+#include "aether/math/fixed_formant.hpp"
+#include "aether/math/fixed_exciter.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2393,6 +2395,44 @@ void test_fixed_phaser_and_clipper() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_formant_and_exciter() {
+    std::cout << "[TEST] Embedded Fixed-Point Vocal Formant Filter & Harmonic Exciter... ";
+    using aether::math::FixedFormantFilter;
+    using aether::math::FixedExciter;
+    using aether::math::FixedQ15;
+
+    // Test Vocal Formant
+    FixedFormantFilter formant;
+    // Iterate through vowels A, E, I, O, U
+    for (uint8_t v = 0; v < 5; ++v) {
+        formant.set_vowel(static_cast<FixedFormantFilter::Vowel>(v));
+        formant.reset();
+        for (int i = 0; i < 200; ++i) {
+            auto out = formant.process(FixedQ15::from_float(0.8f));
+            assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+        }
+    }
+
+    formant.reset();
+    auto v_silence = formant.process(FixedQ15(0));
+    assert(v_silence.raw == 0);
+
+    // Test Exciter
+    FixedExciter exciter;
+    exciter.configure(FixedQ15::from_float(0.5f), 32768 * 2, FixedQ15::from_float(0.25f));
+
+    for (int i = 0; i < 500; ++i) {
+        auto out = exciter.process(FixedQ15::from_float(0.7f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    exciter.reset();
+    auto e_silence = exciter.process(FixedQ15(0));
+    assert(e_silence.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2499,6 +2539,7 @@ int main() {
     test_fixed_ring_mod_and_comb();
     test_fixed_svf_and_bitcrusher();
     test_fixed_phaser_and_clipper();
-    std::cout << "\033[1;32mALL 104 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_formant_and_exciter();
+    std::cout << "\033[1;32mALL 105 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
