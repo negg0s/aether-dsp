@@ -90,6 +90,8 @@
 #include "aether/embedded/eurorack_euclidean.hpp"
 #include "aether/embedded/eurorack_clock_mult.hpp"
 #include "aether/embedded/eurorack_envelope_follower.hpp"
+#include "aether/embedded/eurorack_sallen_key.hpp"
+#include "aether/embedded/eurorack_ring_mod.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3415,6 +3417,53 @@ void test_eurorack_clock_mult_and_envelope_follower() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_sallen_key_and_ring_mod() {
+    std::cout << "[TEST] Embedded Eurorack Sallen-Key Filter & Carrier Ring Mod... ";
+    using aether::embedded::EurorackSallenKeyFilter;
+    using aether::embedded::EurorackRingModulator;
+    using aether::math::FixedQ15;
+
+    // Test Sallen-Key 2-Pole Diode Filter
+    EurorackSallenKeyFilter skf;
+    skf.configure(FixedQ15::from_float(0.15f), FixedQ15::from_float(0.5f), EurorackSallenKeyFilter::FilterType::LowPass);
+
+    // Filter DC step response
+    FixedQ15 step_out(0);
+    for (int i = 0; i < 100; ++i) {
+        step_out = skf.process(FixedQ15::from_float(0.8f));
+        assert(step_out.to_float() >= -1.0f && step_out.to_float() <= 1.0f);
+    }
+    // Low-pass should converge towards input DC (attenuated by feedback resonance)
+    assert(step_out.to_float() > 0.4f);
+
+    // HighPass mode
+    skf.reset();
+    skf.configure(FixedQ15::from_float(0.15f), FixedQ15::from_float(0.5f), EurorackSallenKeyFilter::FilterType::HighPass);
+    // Initial edge produces transient, then converges to 0 for DC
+    for (int i = 0; i < 100; ++i) {
+        step_out = skf.process(FixedQ15::from_float(0.8f));
+    }
+    assert(std::abs(step_out.to_float()) < 0.1f);
+
+    // Test Ring Modulator with internal carrier
+    EurorackRingModulator rm;
+    rm.configure(FixedQ15::from_float(1.0f), FixedQ15(0)); // 100% wet
+    rm.set_carrier_freq(10000000); // Fast carrier
+
+    for (int i = 0; i < 100; ++i) {
+        FixedQ15 mod_out = rm.process(FixedQ15::from_float(0.7f));
+        assert(mod_out.to_float() >= -1.0f && mod_out.to_float() <= 1.0f);
+    }
+
+    // Reset silence test
+    rm.reset();
+    rm.configure(FixedQ15::from_float(0.5f), FixedQ15(0));
+    FixedQ15 zero_out = rm.process(FixedQ15(0));
+    assert(zero_out.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3538,6 +3587,7 @@ int main() {
     test_eurorack_vector_panner_and_wavefolder();
     test_eurorack_bernoulli_and_euclidean();
     test_eurorack_clock_mult_and_envelope_follower();
-    std::cout << "\033[1;32mALL 121 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_sallen_key_and_ring_mod();
+    std::cout << "\033[1;32mALL 122 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
