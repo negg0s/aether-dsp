@@ -78,6 +78,8 @@
 #include "aether/embedded/daisy_midi.hpp"
 #include "aether/embedded/daisy_oled.hpp"
 #include "aether/embedded/eurorack_sequencer.hpp"
+#include "aether/embedded/eurorack_quantizer.hpp"
+#include "aether/embedded/eurorack_logic.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3008,6 +3010,80 @@ void test_daisy_oled_and_eurorack_sequencer() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_quantizer_and_logic() {
+    std::cout << "[TEST] Embedded Eurorack Scale Quantizer & Boolean Logic Core... ";
+    using aether::embedded::EurorackQuantizer;
+    using aether::embedded::EurorackLogicCore;
+
+    EurorackQuantizer q;
+    // Chromatic: 0 mV (C) -> 0 mV
+    assert(q.quantize(0) == 0);
+
+    // 83 mV is C# (approx 83.33 mV)
+    assert(q.quantize(83) == 83);
+
+    // Set C Major scale (C, D, E, F, G, A, B)
+    // C# = 83 mV should snap down to C (0 mV) or up to D (166 mV)
+    q.set_scale(EurorackQuantizer::Scale::Major);
+    int16_t snap_csharp = q.quantize(83);
+    assert(snap_csharp == 0 || snap_csharp == 166);
+
+    // 1000 mV (1 Octave above C) -> 1000 mV
+    assert(q.quantize(1000) == 1000);
+
+    // Minor Pentatonic scale
+    q.set_scale(EurorackQuantizer::Scale::PentatonicMinor);
+    // Eb is note 3 -> (3 * 1000 + 6) / 12 = 250 mV
+    assert(q.quantize(250) == 250);
+
+    // Test Eurorack Logic Core
+    assert(EurorackLogicCore::evaluate_logic(true, true, EurorackLogicCore::LogicOp::AND) == true);
+    assert(EurorackLogicCore::evaluate_logic(true, false, EurorackLogicCore::LogicOp::AND) == false);
+    assert(EurorackLogicCore::evaluate_logic(true, false, EurorackLogicCore::LogicOp::OR) == true);
+    assert(EurorackLogicCore::evaluate_logic(true, true, EurorackLogicCore::LogicOp::XOR) == false);
+    assert(EurorackLogicCore::evaluate_logic(true, false, EurorackLogicCore::LogicOp::XOR) == true);
+    assert(EurorackLogicCore::evaluate_logic(true, true, EurorackLogicCore::LogicOp::NAND) == false);
+    assert(EurorackLogicCore::evaluate_logic(false, false, EurorackLogicCore::LogicOp::NOR) == true);
+
+    // Test Clock Divider
+    EurorackLogicCore logic;
+    // Pulse 1: rising edge
+    auto div1 = logic.clock_divider(true);
+    assert(div1.div2 == true);
+    (void)logic.clock_divider(false);
+
+    // Pulse 2: rising edge
+    auto div2 = logic.clock_divider(true);
+    assert(div2.div2 == false);
+    assert(div2.div4 == true);
+    (void)logic.clock_divider(false);
+
+    // Pulse 3: rising edge
+    auto div3 = logic.clock_divider(true);
+    assert(div3.div2 == true);
+    assert(div3.div4 == true);
+    (void)logic.clock_divider(false);
+
+    // Pulse 4: rising edge
+    auto div4 = logic.clock_divider(true);
+    assert(div4.div2 == false);
+    assert(div4.div4 == false);
+    assert(div4.div8 == true);
+
+    // Test Gate Delay
+    logic.reset();
+    bool gd0 = logic.process_gate_delay(true, 3);
+    assert(gd0 == false);
+    bool gd1 = logic.process_gate_delay(false, 3);
+    assert(gd1 == false);
+    bool gd2 = logic.process_gate_delay(false, 3);
+    assert(gd2 == false);
+    bool gd3 = logic.process_gate_delay(false, 3);
+    assert(gd3 == true); // Delayed high pulse emerges after 3 steps
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3125,6 +3201,7 @@ int main() {
     test_fixed_leslie_and_vibrato();
     test_fixed_spsc_queue_and_midi_parser();
     test_daisy_oled_and_eurorack_sequencer();
-    std::cout << "\033[1;32mALL 115 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_quantizer_and_logic();
+    std::cout << "\033[1;32mALL 116 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
