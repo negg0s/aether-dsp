@@ -110,6 +110,8 @@
 #include "aether/embedded/eurorack_macro_osc.hpp"
 #include "aether/embedded/eurorack_wavetable_scanner.hpp"
 #include "aether/embedded/eurorack_grains.hpp"
+#include "aether/embedded/eurorack_vocoder.hpp"
+#include "aether/embedded/eurorack_pll_core.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3910,6 +3912,45 @@ void test_eurorack_wavetable_and_grains() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_vocoder_and_pll() {
+    std::cout << "[TEST] Embedded Eurorack Vocoder Filterbank & CMOS 4046 PLL... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackVocoder;
+    using aether::embedded::EurorackPllCore;
+
+    // 1. Test Eurorack 16-channel Vocoder
+    EurorackVocoder vocoder;
+    vocoder.set_release(FixedQ15::from_float(0.9f));
+    vocoder.set_formant_shift(2); // Shift up 2 formant bands
+
+    for (int i = 0; i < 500; ++i) {
+        float mod_f = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 40.0f);
+        float car_f = (i % 20 < 10) ? 0.8f : -0.8f; // Square wave carrier
+
+        FixedQ15 mod_s = FixedQ15::from_float(mod_f * 0.8f);
+        FixedQ15 car_s = FixedQ15::from_float(car_f * 0.8f);
+
+        FixedQ15 voc_out = vocoder.process(mod_s, car_s);
+        assert(voc_out.to_float() >= -1.0f && voc_out.to_float() <= 1.0f);
+    }
+
+    // 2. Test Eurorack PLL Core (CMOS 4046 model)
+    EurorackPllCore pll;
+    pll.set_center_frequency(220.0f, 48000.0f);
+    pll.set_ratio(2, 1); // 2x frequency multiplication
+
+    // Feed 220Hz square clock reference
+    for (int i = 0; i < 1000; ++i) {
+        int16_t clk_val = (i % 218 < 109) ? 20000 : -20000;
+        auto out = pll.process(FixedQ15::from_raw(clk_val));
+        assert(out.vco_square.to_float() >= -1.0f && out.vco_square.to_float() <= 1.0f);
+        assert(out.vco_triangle.to_float() >= -1.0f && out.vco_triangle.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4043,6 +4084,7 @@ int main() {
     test_eurorack_diode_fuzz_and_slope_gen();
     test_eurorack_attenuverter_and_macro_osc();
     test_eurorack_wavetable_and_grains();
-    std::cout << "\033[1;32mALL 131 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_vocoder_and_pll();
+    std::cout << "\033[1;32mALL 132 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
