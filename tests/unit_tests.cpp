@@ -152,6 +152,8 @@
 #include "aether/embedded/eurorack_analog_ring_vca.hpp"
 #include "aether/embedded/eurorack_harmonic_gen.hpp"
 #include "aether/embedded/eurorack_dynamics_limiter.hpp"
+#include "aether/embedded/eurorack_formant_vowel.hpp"
+#include "aether/embedded/eurorack_poisson_burst.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4806,6 +4808,51 @@ void test_eurorack_harmonic_gen_and_dynamics_limiter() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_formant_vowel_and_poisson_burst() {
+    std::cout << "[TEST] Embedded Eurorack Formant Vowel Filter & Poisson Burst Engine... ";
+
+    using aether::embedded::EurorackFormantVowel;
+    using aether::embedded::EurorackPoissonBurst;
+
+    // 1. Test Formant Vowel Filter
+    EurorackFormantVowel vowel;
+    vowel.set_vowel(0); // /a/
+    vowel.set_resonance(20000);
+
+    for (int i = 0; i < 400; ++i) {
+        float in_f = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 30.0f);
+        int16_t in_s = static_cast<int16_t>(in_f * 20000.0f);
+        int16_t out_s = vowel.process(in_s);
+        assert(out_s >= -32768 && out_s <= 32767);
+    }
+
+    // Morph vowel to /u/ (32767)
+    vowel.set_vowel(32767);
+    for (int i = 0; i < 400; ++i) {
+        float in_f = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 30.0f);
+        int16_t in_s = static_cast<int16_t>(in_f * 20000.0f);
+        int16_t out_s = vowel.process(in_s);
+        assert(out_s >= -32768 && out_s <= 32767);
+    }
+
+    // 2. Test Stochastic Poisson Burst
+    EurorackPoissonBurst burst;
+    burst.set_density(25000); // Higher density
+    burst.set_gate_length(20);
+
+    bool observed_gate = false;
+    for (int i = 0; i < 2000; ++i) {
+        auto out = burst.process();
+        assert(out.cv_mV >= 0 && out.cv_mV <= 5000);
+        if (out.gate) {
+            observed_gate = true;
+        }
+    }
+    assert(observed_gate);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4960,6 +5007,7 @@ int main() {
     test_eurorack_raga_and_sustainer_fuzz();
     test_eurorack_gamelan_and_ring_vca();
     test_eurorack_harmonic_gen_and_dynamics_limiter();
-    std::cout << "\033[1;32mALL 152 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_formant_vowel_and_poisson_burst();
+    std::cout << "\033[1;32mALL 153 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
