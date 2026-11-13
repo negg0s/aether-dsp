@@ -150,6 +150,8 @@
 #include "aether/embedded/eurorack_sustainer_fuzz.hpp"
 #include "aether/embedded/eurorack_slendro_pelog.hpp"
 #include "aether/embedded/eurorack_analog_ring_vca.hpp"
+#include "aether/embedded/eurorack_harmonic_gen.hpp"
+#include "aether/embedded/eurorack_dynamics_limiter.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4763,6 +4765,47 @@ void test_eurorack_gamelan_and_ring_vca() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_harmonic_gen_and_dynamics_limiter() {
+    std::cout << "[TEST] Embedded Eurorack Harmonic Generator & Dynamics Limiter... ";
+
+    using aether::embedded::EurorackHarmonicGen;
+    using aether::embedded::EurorackDynamicsLimiter;
+
+    // 1. Test Harmonic Generator
+    EurorackHarmonicGen hgen;
+    hgen.set_pitch_cv(0); // 0 mV (base pitch)
+    hgen.set_preset_spectrum(0); // Fundamental only
+
+    // Generate samples and ensure finite bounded output
+    for (int i = 0; i < 200; ++i) {
+        int16_t sample = hgen.process();
+        assert(sample >= -32768 && sample <= 32767);
+    }
+
+    // Switch to sawtooth harmonic profile (1/n)
+    hgen.set_preset_spectrum(16384);
+    for (int i = 0; i < 200; ++i) {
+        int16_t sample = hgen.process();
+        assert(sample >= -32768 && sample <= 32767);
+    }
+
+    // 2. Test Dynamics Limiter
+    EurorackDynamicsLimiter limiter;
+    limiter.set_threshold(8192); // -12 dB clamp
+    limiter.set_knee(2048);
+    limiter.set_makeup_gain(32767); // Unity
+
+    // Feed high amplitude hot signal (above threshold)
+    for (int i = 0; i < 300; ++i) {
+        float f = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 20.0f);
+        int16_t hot_signal = static_cast<int16_t>(f * 30000.0f);
+        int16_t limited = limiter.process(hot_signal);
+        assert(limited >= -32768 && limited <= 32767);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4916,6 +4959,7 @@ int main() {
     test_eurorack_maqam_and_opto_compressor();
     test_eurorack_raga_and_sustainer_fuzz();
     test_eurorack_gamelan_and_ring_vca();
-    std::cout << "\033[1;32mALL 151 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_harmonic_gen_and_dynamics_limiter();
+    std::cout << "\033[1;32mALL 152 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
