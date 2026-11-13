@@ -96,6 +96,8 @@
 #include "aether/embedded/eurorack_dual_formant.hpp"
 #include "aether/embedded/eurorack_limiter.hpp"
 #include "aether/embedded/eurorack_tape_flutter.hpp"
+#include "aether/embedded/eurorack_wave_multiplier.hpp"
+#include "aether/embedded/eurorack_low_pass_gate.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3557,6 +3559,59 @@ void test_eurorack_limiter_and_tape_flutter() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_wave_multiplier_and_lpg() {
+    std::cout << "[TEST] Embedded Eurorack Wave Multiplier & Buchla Low-Pass Gate... ";
+    using aether::embedded::EurorackWaveMultiplier;
+    using aether::embedded::EurorackLowPassGate;
+    using aether::math::FixedQ15;
+
+    // Test Serge Wave Multiplier
+    EurorackWaveMultiplier wm;
+    wm.configure(FixedQ15::from_float(1.5f), FixedQ15(0), FixedQ15::from_float(0.5f));
+
+    for (int i = -100; i <= 100; ++i) {
+        FixedQ15 in_val = FixedQ15::from_float(i / 100.0f);
+        FixedQ15 out_val = wm.process(in_val);
+        assert(out_val.to_float() >= -1.0f && out_val.to_float() <= 1.0f);
+    }
+
+    // Zero input produces centered DC output
+    wm.reset();
+    FixedQ15 zero_out = wm.process(FixedQ15(0));
+    assert(zero_out.to_float() >= -1.0f && zero_out.to_float() <= 1.0f);
+
+    // Test Buchla Low Pass Gate (Vactrol model)
+    EurorackLowPassGate lpg;
+    lpg.set_mode(EurorackLowPassGate::Mode::Both);
+    lpg.set_decay(FixedQ15::from_float(0.01f));
+
+    // Zero CV -> Gate closed, silence
+    for (int i = 0; i < 20; ++i) {
+        FixedQ15 closed_out = lpg.process(FixedQ15::from_float(0.8f), 0);
+        assert(closed_out.to_float() < 0.05f);
+    }
+    assert(lpg.vactrol_level().to_float() < 0.05f);
+
+    // Full 5000 mV CV ping -> Gate opens rapidly
+    for (int i = 0; i < 10; ++i) {
+        (void)lpg.process(FixedQ15::from_float(0.8f), 5000);
+    }
+    assert(lpg.vactrol_level().to_float() > 0.7f);
+
+    // Drop CV back to 0 -> slow vactrol ringing decay
+    (void)lpg.process(FixedQ15::from_float(0.8f), 0);
+    // Vactrol decay is sluggish, should still be > 0.4 after 1 step
+    assert(lpg.vactrol_level().to_float() > 0.4f);
+
+    // After 200 samples of zero CV, vactrol should decay towards silence
+    for (int i = 0; i < 200; ++i) {
+        (void)lpg.process(FixedQ15::from_float(0.8f), 0);
+    }
+    assert(lpg.vactrol_level().to_float() < 0.15f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3683,6 +3738,7 @@ int main() {
     test_eurorack_sallen_key_and_ring_mod();
     test_eurorack_quadrature_and_dual_formant();
     test_eurorack_limiter_and_tape_flutter();
-    std::cout << "\033[1;32mALL 124 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_wave_multiplier_and_lpg();
+    std::cout << "\033[1;32mALL 125 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
