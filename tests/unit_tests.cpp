@@ -108,6 +108,8 @@
 #include "aether/embedded/eurorack_slope_gen.hpp"
 #include "aether/embedded/eurorack_attenuverter.hpp"
 #include "aether/embedded/eurorack_macro_osc.hpp"
+#include "aether/embedded/eurorack_wavetable_scanner.hpp"
+#include "aether/embedded/eurorack_grains.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3864,6 +3866,50 @@ void test_eurorack_attenuverter_and_macro_osc() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_wavetable_and_grains() {
+    std::cout << "[TEST] Embedded Eurorack Wavetable Scanner & Granular Cloud... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackWavetableScanner;
+    using aether::embedded::EurorackGranularCloud;
+
+    EurorackWavetableScanner wt;
+    wt.set_frequency(220.0f, 48000.0f);
+
+    // Test morphing across banks
+    for (int bank = 0; bank < 4; ++bank) {
+        int16_t morph_raw = static_cast<int16_t>((bank * 32767) / 3);
+        wt.set_morph(FixedQ15::from_raw(morph_raw));
+        for (int i = 0; i < 256; ++i) {
+            FixedQ15 s = wt.process();
+            assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+        }
+    }
+
+    // Test Granular Cloud
+    EurorackGranularCloud grains;
+    grains.set_position(FixedQ15::from_float(0.2f));
+    grains.set_size(256);
+    grains.set_pitch_ratio_q12(4096); // 1.0x
+
+    // Feed a sine wave into the granular buffer
+    for (int i = 0; i < 2000; ++i) {
+        float f_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 100.0f);
+        FixedQ15 in_s = FixedQ15::from_float(f_val * 0.7f);
+        FixedQ15 out_s = grains.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    // Test Freeze mode
+    grains.set_freeze(true);
+    for (int i = 0; i < 1000; ++i) {
+        FixedQ15 out_s = grains.process(FixedQ15::from_raw(0));
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3996,6 +4042,7 @@ int main() {
     test_eurorack_bbd_chorus_and_cv_slicer();
     test_eurorack_diode_fuzz_and_slope_gen();
     test_eurorack_attenuverter_and_macro_osc();
-    std::cout << "\033[1;32mALL 130 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_wavetable_and_grains();
+    std::cout << "\033[1;32mALL 131 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
