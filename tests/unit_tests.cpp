@@ -82,6 +82,8 @@
 #include "aether/embedded/eurorack_logic.hpp"
 #include "aether/embedded/eurorack_slew.hpp"
 #include "aether/embedded/eurorack_sample_hold.hpp"
+#include "aether/embedded/eurorack_matrix_mixer.hpp"
+#include "aether/embedded/eurorack_calibrator.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3166,6 +3168,64 @@ void test_eurorack_slew_and_sample_hold() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_matrix_mixer_and_calibrator() {
+    std::cout << "[TEST] Embedded Eurorack 4x4 Matrix Mixer & Hardware CV Calibrator... ";
+    using aether::embedded::EurorackMatrixMixer;
+    using aether::embedded::EurorackCvCalibrator;
+    using aether::math::FixedQ15;
+
+    // Test Eurorack 4x4 Matrix Mixer
+    EurorackMatrixMixer mixer;
+    // Set diagonal gains to 1.0 (pass-through)
+    for (size_t i = 0; i < 4; ++i) {
+        mixer.set_gain(i, i, FixedQ15::from_float(0.999f));
+    }
+
+    std::array<FixedQ15, 4> in_sig = {
+        FixedQ15::from_float(0.2f),
+        FixedQ15::from_float(0.4f),
+        FixedQ15::from_float(0.6f),
+        FixedQ15::from_float(0.8f)
+    };
+
+    auto out_diag = mixer.process(in_sig);
+    for (size_t i = 0; i < 4; ++i) {
+        assert(std::abs(out_diag[i].to_float() - in_sig[i].to_float()) < 0.05f);
+    }
+
+    // Set summing bus on Out 0: sum in0, in1, in2, in3
+    mixer.reset();
+    mixer.set_gain(0, 0, FixedQ15::from_float(0.5f));
+    mixer.set_gain(1, 0, FixedQ15::from_float(0.5f));
+    auto out_sum = mixer.process(in_sig);
+    // (0.2 * 0.5) + (0.4 * 0.5) = 0.1 + 0.2 = 0.3
+    assert(std::abs(out_sum[0].to_float() - 0.3f) < 0.02f);
+
+    // Test soft saturation clipping
+    mixer.set_gain(2, 0, FixedQ15::from_float(1.0f));
+    mixer.set_gain(3, 0, FixedQ15::from_float(1.0f));
+    auto out_clip = mixer.process(in_sig);
+    assert(out_clip[0].to_float() >= -1.0f && out_clip[0].to_float() <= 1.0f);
+
+    // Test Eurorack CV Calibrator
+    EurorackCvCalibrator cal;
+    // Default calibration is identity
+    assert(cal.apply(0, 1000) == 1000);
+    assert(cal.apply(0, 3000) == 3000);
+
+    // Calibrate Channel 0:
+    // Suppose ADC measures 1020 mV for 1000 mV input, and 3040 mV for 3000 mV input.
+    // delta = 2020 mV (instead of 2000 mV).
+    cal.calibrate_two_point(0, 1020, 3040);
+
+    int16_t cal_v1 = cal.apply(0, 1020);
+    int16_t cal_v3 = cal.apply(0, 3040);
+    assert(std::abs(cal_v1 - 1000) <= 2);
+    assert(std::abs(cal_v3 - 3000) <= 2);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3285,6 +3345,7 @@ int main() {
     test_daisy_oled_and_eurorack_sequencer();
     test_eurorack_quantizer_and_logic();
     test_eurorack_slew_and_sample_hold();
-    std::cout << "\033[1;32mALL 117 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_matrix_mixer_and_calibrator();
+    std::cout << "\033[1;32mALL 118 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
