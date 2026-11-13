@@ -70,6 +70,8 @@
 #include "aether/math/fixed_sub_synth.hpp"
 #include "aether/math/fixed_comb_chorus.hpp"
 #include "aether/math/fixed_tape_saturator.hpp"
+#include "aether/math/fixed_shepard_phaser.hpp"
+#include "aether/math/fixed_autowah.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2721,6 +2723,43 @@ void test_fixed_comb_chorus_and_tape_saturator() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_shepard_phaser_and_autowah() {
+    std::cout << "[TEST] Embedded Fixed-Point Shepard Barber-Pole Phaser & Dynamic AutoWah... ";
+    using aether::math::FixedCombAllpassPhasor;
+    using aether::math::FixedAutoWah;
+    using aether::math::FixedQ15;
+
+    // Test Barber-Pole Shepard-Risset Phaser
+    FixedCombAllpassPhasor phaser;
+    phaser.configure(1000000, FixedQ15::from_float(0.4f), FixedQ15::from_float(0.5f));
+
+    for (int i = 0; i < 1000; ++i) {
+        auto out = phaser.process(FixedQ15::from_float(0.7f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    phaser.reset();
+    auto p_silence = phaser.process(FixedQ15(0));
+    assert(p_silence.raw == 0);
+
+    // Test Dynamic Auto-Wah
+    FixedAutoWah wah;
+    wah.configure(FixedQ15::from_float(0.05f), FixedQ15::from_float(0.4f), FixedQ15::from_float(0.8f), FixedQ15::from_float(0.12f));
+
+    // Impulse burst to trigger envelope filter sweep
+    for (int i = 0; i < 20; ++i) (void)wah.process(FixedQ15::from_float(0.9f));
+    for (int i = 0; i < 400; ++i) {
+        auto out = wah.process(FixedQ15::from_float(0.1f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    wah.reset();
+    auto w_silence = wah.process(FixedQ15(0));
+    assert(w_silence.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2834,6 +2873,7 @@ int main() {
     test_fixed_pitch_detector_and_crossover();
     test_fixed_eq_and_sub_synth();
     test_fixed_comb_chorus_and_tape_saturator();
-    std::cout << "\033[1;32mALL 111 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_shepard_phaser_and_autowah();
+    std::cout << "\033[1;32mALL 112 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
