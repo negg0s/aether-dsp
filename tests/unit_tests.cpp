@@ -106,6 +106,8 @@
 #include "aether/embedded/eurorack_cv_slicer.hpp"
 #include "aether/embedded/eurorack_diode_fuzz.hpp"
 #include "aether/embedded/eurorack_slope_gen.hpp"
+#include "aether/embedded/eurorack_attenuverter.hpp"
+#include "aether/embedded/eurorack_macro_osc.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3808,6 +3810,60 @@ void test_eurorack_diode_fuzz_and_slope_gen() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_attenuverter_and_macro_osc() {
+    std::cout << "[TEST] Embedded Eurorack Attenuverter & Multi-Model Macro-Osc... ";
+    using aether::embedded::EurorackAttenuverter;
+    using aether::embedded::EurorackMacroOscillator;
+    using aether::math::FixedQ15;
+
+    // Test Eurorack Attenuverter & DC Offset Shifter
+    EurorackAttenuverter att;
+    att.set_scale(FixedQ15::from_float(-0.5f)); // inverting 50%
+    att.set_offset(1000); // +1000 mV offset
+
+    // Input = 2000 mV -> (-2000 * 0.5) + 1000 = -1000 + 1000 = 0 mV
+    int16_t cv_out = att.process_cv(2000);
+    assert(std::abs(cv_out) <= 2);
+
+    // Mute test
+    att.set_mute(true);
+    assert(att.process_cv(2000) == 0);
+    assert(att.process_audio(FixedQ15::from_float(0.8f)).raw == 0);
+
+    // Test Eurorack Multi-Model Macro Oscillator (Braids / Plaits style)
+    EurorackMacroOscillator macro;
+
+    // Test 1: Virtual Analog Dual Saw
+    macro.configure(EurorackMacroOscillator::Model::VirtualAnalogSaw, 1000000, FixedQ15::from_float(0.3f), FixedQ15::from_float(0.4f));
+    for (int i = 0; i < 100; ++i) {
+        FixedQ15 s = macro.process();
+        assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+    }
+
+    // Test 2: Phase Distortion (CZ resonance)
+    macro.configure(EurorackMacroOscillator::Model::PhaseDistortion, 1000000, FixedQ15::from_float(0.7f), FixedQ15::from_float(0.5f));
+    for (int i = 0; i < 100; ++i) {
+        FixedQ15 s = macro.process();
+        assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+    }
+
+    // Test 3: Harmonic Cluster Additive
+    macro.configure(EurorackMacroOscillator::Model::HarmonicCluster, 1000000, FixedQ15::from_float(0.5f), FixedQ15::from_float(0.5f));
+    for (int i = 0; i < 100; ++i) {
+        FixedQ15 s = macro.process();
+        assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+    }
+
+    // Test 4: 2-Op FM Bell Synthesis
+    macro.configure(EurorackMacroOscillator::Model::FrequencyModulation, 1000000, FixedQ15::from_float(0.8f), FixedQ15::from_float(0.5f));
+    for (int i = 0; i < 100; ++i) {
+        FixedQ15 s = macro.process();
+        assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3939,6 +3995,7 @@ int main() {
     test_eurorack_wave_terrain_and_chaos();
     test_eurorack_bbd_chorus_and_cv_slicer();
     test_eurorack_diode_fuzz_and_slope_gen();
-    std::cout << "\033[1;32mALL 129 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_attenuverter_and_macro_osc();
+    std::cout << "\033[1;32mALL 130 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
