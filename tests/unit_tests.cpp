@@ -132,6 +132,8 @@
 #include "aether/embedded/eurorack_crossfader.hpp"
 #include "aether/embedded/eurorack_octave_doubler.hpp"
 #include "aether/embedded/eurorack_polarizer_utility.hpp"
+#include "aether/embedded/eurorack_phase_pitch_shifter.hpp"
+#include "aether/embedded/eurorack_multiband_follower.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4399,6 +4401,40 @@ void test_eurorack_octave_doubler_and_polarizer() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_phase_pitch_and_multiband_follower() {
+    std::cout << "[TEST] Embedded Eurorack Phase Pitch Shifter & Multiband Follower... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackPhasePitchShifter;
+    using aether::embedded::EurorackMultibandFollower;
+
+    // 1. Test Phase Pitch Shifter
+    EurorackPhasePitchShifter pps;
+    pps.set_pitch_shift(7.0f); // Perfect fifth up (+7 semitones)
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 80.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.7f);
+        FixedQ15 out_s = pps.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    // 2. Test Multiband Envelope Follower
+    EurorackMultibandFollower mbf;
+    mbf.set_release(FixedQ15::from_float(0.9f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = (i % 30 < 15) ? 0.8f : -0.8f;
+        FixedQ15 in_s = FixedQ15::from_float(in_val);
+        auto out = mbf.process(in_s);
+        assert(out.env_low.to_float() >= 0.0f && out.env_low.to_float() <= 1.0f);
+        assert(out.env_mid.to_float() >= 0.0f && out.env_mid.to_float() <= 1.0f);
+        assert(out.env_high.to_float() >= 0.0f && out.env_high.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4543,6 +4579,7 @@ int main() {
     test_eurorack_pulsar_and_asr();
     test_eurorack_drum_and_crossfader();
     test_eurorack_octave_doubler_and_polarizer();
-    std::cout << "\033[1;32mALL 142 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_phase_pitch_and_multiband_follower();
+    std::cout << "\033[1;32mALL 143 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
