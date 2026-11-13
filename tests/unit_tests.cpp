@@ -102,6 +102,8 @@
 #include "aether/embedded/eurorack_window_comparator.hpp"
 #include "aether/embedded/eurorack_wave_terrain.hpp"
 #include "aether/embedded/eurorack_chaos.hpp"
+#include "aether/embedded/eurorack_bbd_chorus.hpp"
+#include "aether/embedded/eurorack_cv_slicer.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3701,6 +3703,56 @@ void test_eurorack_wave_terrain_and_chaos() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_bbd_chorus_and_cv_slicer() {
+    std::cout << "[TEST] Embedded Eurorack BBD Chorus & Anti-Click CV Slicer... ";
+    using aether::embedded::EurorackBbdChorus;
+    using aether::embedded::EurorackCvSlicer;
+    using aether::math::FixedQ15;
+
+    // Test BBD Chorus
+    EurorackBbdChorus bbd;
+    bbd.configure(200000, FixedQ15::from_float(0.7f), FixedQ15::from_float(0.3f));
+
+    for (int i = 0; i < 300; ++i) {
+        FixedQ15 out = bbd.process(FixedQ15::from_float(0.5f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    bbd.reset();
+    FixedQ15 silence = bbd.process(FixedQ15(0));
+    assert(silence.raw == 0);
+
+    // Test CV Slicer
+    EurorackCvSlicer slicer;
+    // Pattern: 0x000F (First 4 steps active, next 12 steps muted)
+    slicer.set_pattern(0x000F);
+
+    // Initial step 0
+    slicer.clock_step(); // step 1 (active)
+    assert(slicer.is_gate_active());
+
+    // Ramp smoothing
+    for (int i = 0; i < 20; ++i) {
+        FixedQ15 sliced = slicer.process(FixedQ15::from_float(0.8f));
+        assert(sliced.to_float() >= 0.0f && sliced.to_float() <= 0.81f);
+    }
+
+    // Step into muted region
+    for (int s = 0; s < 4; ++s) {
+        slicer.clock_step();
+    }
+    assert(!slicer.is_gate_active()); // step 5 is inactive
+
+    // Should ramp down to silence smoothly
+    FixedQ15 muted_out(0);
+    for (int i = 0; i < 20; ++i) {
+        muted_out = slicer.process(FixedQ15::from_float(0.8f));
+    }
+    assert(muted_out.to_float() < 0.05f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3830,6 +3882,7 @@ int main() {
     test_eurorack_wave_multiplier_and_lpg();
     test_eurorack_sub_octave_and_window_comparator();
     test_eurorack_wave_terrain_and_chaos();
-    std::cout << "\033[1;32mALL 127 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_bbd_chorus_and_cv_slicer();
+    std::cout << "\033[1;32mALL 128 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
