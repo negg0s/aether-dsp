@@ -130,6 +130,8 @@
 #include "aether/embedded/eurorack_analog_shift_reg.hpp"
 #include "aether/embedded/eurorack_drum_exciter.hpp"
 #include "aether/embedded/eurorack_crossfader.hpp"
+#include "aether/embedded/eurorack_octave_doubler.hpp"
+#include "aether/embedded/eurorack_polarizer_utility.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4358,6 +4360,45 @@ void test_eurorack_drum_and_crossfader() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_octave_doubler_and_polarizer() {
+    std::cout << "[TEST] Embedded Eurorack Octave Doubler & Polarizer Utility... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackOctaveDoubler;
+    using aether::embedded::EurorackPolarizerUtility;
+
+    // 1. Test Octave Doubler
+    EurorackOctaveDoubler doubler;
+    doubler.set_mix(FixedQ15::from_float(1.0f)); // 100% wet
+    doubler.set_knee(FixedQ15::from_float(0.05f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 100.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.7f);
+        FixedQ15 out_s = doubler.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    // 2. Test Polarizer Utility
+    EurorackPolarizerUtility pol;
+    pol.set_polarize_a(FixedQ15::from_float(0.5f));  // +50% gain
+    pol.set_polarize_b(FixedQ15::from_float(-0.5f)); // -50% inverting gain
+    pol.set_rectify_a(true);                        // Full wave rectification on A
+
+    FixedQ15 sig_a = FixedQ15::from_float(-0.8f);
+    FixedQ15 sig_b = FixedQ15::from_float(0.8f);
+
+    auto out = pol.process(sig_a, sig_b);
+    // | -0.8 | * 0.5 = 0.4
+    assert(std::abs(out.out_a.to_float() - 0.4f) < 0.05f);
+    // 0.8 * -0.5 = -0.4
+    assert(std::abs(out.out_b.to_float() - (-0.4f)) < 0.05f);
+    // Sum = (0.4 + (-0.4)) / 2 = 0.0
+    assert(std::abs(out.out_sum.to_float()) < 0.05f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4501,6 +4542,7 @@ int main() {
     test_eurorack_chebyshev_and_pitch_tracker();
     test_eurorack_pulsar_and_asr();
     test_eurorack_drum_and_crossfader();
-    std::cout << "\033[1;32mALL 141 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_octave_doubler_and_polarizer();
+    std::cout << "\033[1;32mALL 142 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
