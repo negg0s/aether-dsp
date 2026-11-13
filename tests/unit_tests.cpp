@@ -84,6 +84,8 @@
 #include "aether/embedded/eurorack_sample_hold.hpp"
 #include "aether/embedded/eurorack_matrix_mixer.hpp"
 #include "aether/embedded/eurorack_calibrator.hpp"
+#include "aether/embedded/eurorack_vector_panner.hpp"
+#include "aether/embedded/eurorack_wavefolder.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3226,6 +3228,65 @@ void test_eurorack_matrix_mixer_and_calibrator() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_vector_panner_and_wavefolder() {
+    std::cout << "[TEST] Embedded Eurorack Vector Panner & Timbre Wavefolder... ";
+    using aether::embedded::EurorackVectorPanner;
+    using aether::embedded::EurorackWavefolder;
+    using aether::math::FixedQ15;
+
+    // Test Eurorack 2D Vector Panner
+    EurorackVectorPanner panner;
+    panner.set_law(EurorackVectorPanner::PanningLaw::Linear);
+
+    // Center position (0, 0) -> equal 0.25 to all 4 corners
+    panner.set_position(FixedQ15(0), FixedQ15(0));
+    auto gains_center = panner.get_gains();
+    assert(std::abs(gains_center.a.to_float() - 0.25f) < 0.05f);
+    assert(std::abs(gains_center.b.to_float() - 0.25f) < 0.05f);
+    assert(std::abs(gains_center.c.to_float() - 0.25f) < 0.05f);
+    assert(std::abs(gains_center.d.to_float() - 0.25f) < 0.05f);
+
+    // Top-right Corner D (+1, +1)
+    panner.set_position(FixedQ15::from_float(0.999f), FixedQ15::from_float(0.999f));
+    auto gains_d = panner.get_gains();
+    assert(gains_d.d.to_float() > 0.95f);
+    assert(gains_d.a.to_float() < 0.05f);
+
+    // Pan an audio signal to 4 corners
+    auto quad = panner.pan(FixedQ15::from_float(0.8f));
+    assert(quad.d.to_float() > 0.7f);
+    assert(quad.a.to_float() < 0.05f);
+
+    // Test mix back
+    FixedQ15 mixed = panner.mix(FixedQ15(0), FixedQ15(0), FixedQ15(0), FixedQ15::from_float(0.8f));
+    assert(mixed.to_float() > 0.7f);
+
+    // Test Eurorack Wavefolder
+    EurorackWavefolder folder;
+    folder.set_drive(FixedQ15::from_float(1.0f), 4);
+
+    // Small input below threshold passes unmodified
+    FixedQ15 small_in = FixedQ15::from_float(0.3f);
+    FixedQ15 small_out = folder.process(small_in);
+    assert(std::abs(small_out.to_float() - 0.3f) < 0.01f);
+
+    // Large input folds back
+    folder.set_drive(FixedQ15::from_float(0.999f), 4);
+    // Process full wave sweep
+    for (int i = -100; i <= 100; ++i) {
+        FixedQ15 in_val = FixedQ15::from_float(i / 100.0f);
+        FixedQ15 folded = folder.process(in_val);
+        assert(folded.to_float() >= -1.0f && folded.to_float() <= 1.0f);
+    }
+
+    // Symmetry DC bias test
+    folder.set_symmetry(FixedQ15::from_float(0.2f));
+    FixedQ15 zero_in_biased = folder.process(FixedQ15(0));
+    assert(zero_in_biased.to_float() > 0.05f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3346,6 +3407,7 @@ int main() {
     test_eurorack_quantizer_and_logic();
     test_eurorack_slew_and_sample_hold();
     test_eurorack_matrix_mixer_and_calibrator();
-    std::cout << "\033[1;32mALL 118 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_vector_panner_and_wavefolder();
+    std::cout << "\033[1;32mALL 119 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
