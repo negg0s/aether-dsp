@@ -94,6 +94,8 @@
 #include "aether/embedded/eurorack_ring_mod.hpp"
 #include "aether/embedded/eurorack_quadrature.hpp"
 #include "aether/embedded/eurorack_dual_formant.hpp"
+#include "aether/embedded/eurorack_limiter.hpp"
+#include "aether/embedded/eurorack_tape_flutter.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3510,6 +3512,51 @@ void test_eurorack_quadrature_and_dual_formant() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_limiter_and_tape_flutter() {
+    std::cout << "[TEST] Embedded Eurorack Brickwall Limiter & Tape Wow/Flutter... ";
+    using aether::embedded::EurorackBrickwallLimiter;
+    using aether::embedded::EurorackTapeFlutter;
+    using aether::math::FixedQ15;
+
+    // Test Eurorack Brickwall Limiter
+    EurorackBrickwallLimiter lim;
+    lim.set_ceiling(24000); // ~0.73 FS ceiling
+    lim.set_release(16);
+
+    // Pass small signal (below ceiling)
+    for (int i = 0; i < 40; ++i) {
+        FixedQ15 out = lim.process(FixedQ15::from_float(0.4f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+    assert(lim.gain_reduction().to_float() > 0.99f);
+
+    // Pass extreme hot signal (exceeding ceiling)
+    for (int i = 0; i < 40; ++i) {
+        FixedQ15 out = lim.process(FixedQ15::from_float(0.999f));
+        // Hard assertion: output strictly clamped at or below ceiling
+        assert(out.raw <= 24000);
+        assert(out.raw >= -24000);
+    }
+    // Gain reduction should be active (< 1.0)
+    assert(lim.gain_reduction().to_float() < 0.8f);
+
+    // Test Eurorack Tape Wow/Flutter Simulator
+    EurorackTapeFlutter tape;
+    tape.configure(200000, 3000000, FixedQ15::from_float(0.8f));
+
+    // Feed a continuous tone
+    for (int i = 0; i < 300; ++i) {
+        FixedQ15 out = tape.process(FixedQ15::from_float(0.6f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    tape.reset();
+    FixedQ15 silence = tape.process(FixedQ15(0));
+    assert(silence.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3635,6 +3682,7 @@ int main() {
     test_eurorack_clock_mult_and_envelope_follower();
     test_eurorack_sallen_key_and_ring_mod();
     test_eurorack_quadrature_and_dual_formant();
-    std::cout << "\033[1;32mALL 123 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_limiter_and_tape_flutter();
+    std::cout << "\033[1;32mALL 124 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
