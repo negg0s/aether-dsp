@@ -118,6 +118,8 @@
 #include "aether/embedded/eurorack_wave_animator.hpp"
 #include "aether/embedded/eurorack_scale_harmonizer.hpp"
 #include "aether/embedded/eurorack_clock_matrix.hpp"
+#include "aether/embedded/eurorack_switched_capacitor.hpp"
+#include "aether/embedded/eurorack_micro_looper.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4086,6 +4088,51 @@ void test_eurorack_harmonizer_and_clock_matrix() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_switched_cap_and_micro_looper() {
+    std::cout << "[TEST] Embedded Eurorack Switched Capacitor & Micro Looper... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackSwitchedCapacitorFilter;
+    using aether::embedded::EurorackMicroLooper;
+
+    // 1. Test Switched Capacitor Filter
+    EurorackSwitchedCapacitorFilter sc_filter;
+    sc_filter.set_clock_frequency(4000.0f, 48000.0f);
+    sc_filter.set_resonance(FixedQ15::from_float(0.5f));
+    sc_filter.set_clock_bleed(FixedQ15::from_float(0.05f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = (i % 60 < 30) ? 0.7f : -0.7f;
+        FixedQ15 in_s = FixedQ15::from_float(in_val);
+        FixedQ15 out_s = sc_filter.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    // 2. Test Micro Looper
+    EurorackMicroLooper looper;
+    looper.set_loop_length(1024);
+    looper.set_speed(4096); // 1.0x
+    looper.set_overdub(FixedQ15::from_float(0.8f));
+
+    // Fill looper with ramp wave
+    for (int i = 0; i < 1024; ++i) {
+        float ramp = (static_cast<float>(i) / 512.0f) - 1.0f;
+        looper.process(FixedQ15::from_float(ramp * 0.8f));
+    }
+
+    // Freeze and read backward
+    looper.set_freeze(true);
+    looper.set_reverse(true);
+    looper.set_speed(2048); // 0.5x speed
+
+    for (int i = 0; i < 500; ++i) {
+        FixedQ15 out_s = looper.process(FixedQ15::from_raw(0));
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4223,6 +4270,7 @@ int main() {
     test_eurorack_diode_ladder_and_burst_gen();
     test_eurorack_physical_string_and_animator();
     test_eurorack_harmonizer_and_clock_matrix();
-    std::cout << "\033[1;32mALL 135 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_switched_cap_and_micro_looper();
+    std::cout << "\033[1;32mALL 136 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
