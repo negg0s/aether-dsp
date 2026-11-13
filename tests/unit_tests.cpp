@@ -122,6 +122,8 @@
 #include "aether/embedded/eurorack_micro_looper.hpp"
 #include "aether/embedded/eurorack_dynamic_lpg.hpp"
 #include "aether/embedded/eurorack_frequency_shifter.hpp"
+#include "aether/embedded/eurorack_resonator_bank.hpp"
+#include "aether/embedded/eurorack_turing_machine.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4171,6 +4173,55 @@ void test_eurorack_lpg_and_freq_shifter() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_resonator_bank_and_turing_machine() {
+    std::cout << "[TEST] Embedded Eurorack Resonator Bank & Turing Machine... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackResonatorBank;
+    using aether::embedded::EurorackTuringMachine;
+
+    // 1. Test Resonator Bank
+    EurorackResonatorBank res_bank;
+    res_bank.set_base_frequency(220.0f, 48000.0f);
+    res_bank.set_decay(FixedQ15::from_float(0.95f));
+    res_bank.set_structure(FixedQ15::from_float(0.5f)); // Metal bell structure
+
+    // Excite with an impulse
+    FixedQ15 impulse = FixedQ15::from_float(0.9f);
+    FixedQ15 out0 = res_bank.process(impulse);
+    assert(out0.to_float() >= -1.0f && out0.to_float() <= 1.0f);
+
+    float sum_energy = 0.0f;
+    for (int i = 0; i < 500; ++i) {
+        FixedQ15 s = res_bank.process(FixedQ15::from_raw(0));
+        assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+        sum_energy += std::abs(s.to_float());
+    }
+    assert(sum_energy > 0.1f); // Resonant ringing occurred
+
+    // 2. Test Turing Machine
+    EurorackTuringMachine tm;
+    tm.set_length(16);
+    tm.set_probability(FixedQ15::from_float(0.0f)); // 100% locked loop
+
+    int16_t loop_cv[16];
+    for (int i = 0; i < 16; ++i) {
+        auto out = tm.process(FixedQ15::from_raw(20000));
+        tm.process(FixedQ15::from_raw(0));
+        loop_cv[i] = out.cv_mV;
+        assert(out.cv_mV >= 0 && out.cv_mV <= 4000);
+    }
+
+    // Since loop is locked (prob=0), the next 16 steps must reproduce the identical sequence
+    for (int i = 0; i < 16; ++i) {
+        auto out = tm.process(FixedQ15::from_raw(20000));
+        tm.process(FixedQ15::from_raw(0));
+        assert(out.cv_mV == loop_cv[i]);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4310,6 +4361,7 @@ int main() {
     test_eurorack_harmonizer_and_clock_matrix();
     test_eurorack_switched_cap_and_micro_looper();
     test_eurorack_lpg_and_freq_shifter();
-    std::cout << "\033[1;32mALL 137 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_resonator_bank_and_turing_machine();
+    std::cout << "\033[1;32mALL 138 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
