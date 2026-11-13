@@ -140,6 +140,8 @@
 #include "aether/embedded/eurorack_flanger.hpp"
 #include "aether/embedded/eurorack_just_quantizer.hpp"
 #include "aether/embedded/eurorack_ducking_vca.hpp"
+#include "aether/embedded/eurorack_quarter_tone.hpp"
+#include "aether/embedded/eurorack_harmonic_tremolo.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4565,6 +4567,41 @@ void test_eurorack_just_quantizer_and_ducking_vca() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_quarter_tone_and_harmonic_tremolo() {
+    std::cout << "[TEST] Embedded Eurorack Quarter-Tone Quantizer & Harmonic Tremolo... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackQuarterToneQuantizer;
+    using aether::embedded::EurorackHarmonicTremolo;
+
+    // 1. Test Quarter-Tone Quantizer (24-EDO)
+    EurorackQuarterToneQuantizer qt;
+    // Step size is ~41.67 mV per quarter-tone
+    // 0 mV -> 0 mV
+    assert(qt.process(0) == 0);
+    // 42 mV -> 41 mV (1 quarter-tone)
+    int16_t q1 = qt.process(42);
+    assert(q1 == 41);
+    // 83 mV -> 83 mV (2 quarter-tones = 1 semitone)
+    int16_t q2 = qt.process(83);
+    assert(q2 == 83);
+
+    // 2. Test Harmonic Tremolo
+    EurorackHarmonicTremolo trem;
+    trem.set_mode(EurorackHarmonicTremolo::Mode::Harmonic);
+    trem.set_rate(5.0f, 48000.0f);
+    trem.set_depth(FixedQ15::from_float(0.8f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 40.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.7f);
+        FixedQ15 out_s = trem.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4713,6 +4750,7 @@ int main() {
     test_eurorack_dual_harmonizer_and_chord_memory();
     test_eurorack_expander_and_flanger();
     test_eurorack_just_quantizer_and_ducking_vca();
-    std::cout << "\033[1;32mALL 146 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_quarter_tone_and_harmonic_tremolo();
+    std::cout << "\033[1;32mALL 147 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
