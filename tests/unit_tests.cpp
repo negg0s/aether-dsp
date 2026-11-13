@@ -128,6 +128,8 @@
 #include "aether/embedded/eurorack_pitch_tracker.hpp"
 #include "aether/embedded/eurorack_pulsar_synth.hpp"
 #include "aether/embedded/eurorack_analog_shift_reg.hpp"
+#include "aether/embedded/eurorack_drum_exciter.hpp"
+#include "aether/embedded/eurorack_crossfader.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4311,6 +4313,51 @@ void test_eurorack_pulsar_and_asr() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_drum_and_crossfader() {
+    std::cout << "[TEST] Embedded Eurorack Drum Exciter & Crossfader... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackDrumExciter;
+    using aether::embedded::EurorackCrossfader;
+
+    // 1. Test Drum Exciter
+    EurorackDrumExciter drum;
+    drum.set_pitch(60.0f, 48000.0f); // 60 Hz kick
+    drum.set_decay(FixedQ15::from_float(0.96f));
+    drum.set_punch(FixedQ15::from_float(0.8f));
+
+    drum.trigger(FixedQ15::from_float(0.95f));
+
+    float drum_energy = 0.0f;
+    for (int i = 0; i < 500; ++i) {
+        FixedQ15 s = drum.process();
+        assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+        drum_energy += std::abs(s.to_float());
+    }
+    assert(drum_energy > 1.0f); // Resonant kick generated
+
+    // 2. Test Crossfader
+    EurorackCrossfader xfade;
+    xfade.set_curve(EurorackCrossfader::CurveType::EqualPower);
+
+    // Hard left: 100% Channel A
+    xfade.set_position(FixedQ15::from_float(-1.0f));
+    FixedQ15 a_out = xfade.process(FixedQ15::from_float(0.8f), FixedQ15::from_float(0.2f));
+    assert(std::abs(a_out.to_float() - 0.8f) < 0.05f);
+
+    // Hard right: 100% Channel B
+    xfade.set_position(FixedQ15::from_float(1.0f));
+    FixedQ15 b_out = xfade.process(FixedQ15::from_float(0.8f), FixedQ15::from_float(0.2f));
+    assert(std::abs(b_out.to_float() - 0.2f) < 0.05f);
+
+    // Center: equal-power mix
+    xfade.set_position(FixedQ15::from_float(0.0f));
+    FixedQ15 c_out = xfade.process(FixedQ15::from_float(0.5f), FixedQ15::from_float(0.5f));
+    assert(c_out.to_float() > 0.4f && c_out.to_float() <= 1.0f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4453,6 +4500,7 @@ int main() {
     test_eurorack_resonator_bank_and_turing_machine();
     test_eurorack_chebyshev_and_pitch_tracker();
     test_eurorack_pulsar_and_asr();
-    std::cout << "\033[1;32mALL 140 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_drum_and_crossfader();
+    std::cout << "\033[1;32mALL 141 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
