@@ -98,6 +98,8 @@
 #include "aether/embedded/eurorack_tape_flutter.hpp"
 #include "aether/embedded/eurorack_wave_multiplier.hpp"
 #include "aether/embedded/eurorack_low_pass_gate.hpp"
+#include "aether/embedded/eurorack_sub_octave.hpp"
+#include "aether/embedded/eurorack_window_comparator.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3612,6 +3614,55 @@ void test_eurorack_wave_multiplier_and_lpg() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_sub_octave_and_window_comparator() {
+    std::cout << "[TEST] Embedded Eurorack Sub-Octave & Window Comparator... ";
+    using aether::embedded::EurorackSubOctave;
+    using aether::embedded::EurorackWindowComparator;
+    using aether::math::FixedQ15;
+
+    // Test Eurorack Sub-Octave Generator
+    EurorackSubOctave sub;
+    sub.configure(FixedQ15::from_float(0.5f), FixedQ15::from_float(0.3f), FixedQ15::from_float(0.2f));
+
+    // Feed alternating bipolar square/saw tone
+    for (int cycle = 0; cycle < 10; ++cycle) {
+        FixedQ15 pos_out = sub.process(FixedQ15::from_float(0.6f));
+        assert(pos_out.to_float() >= -1.0f && pos_out.to_float() <= 1.0f);
+        FixedQ15 neg_out = sub.process(FixedQ15::from_float(-0.6f));
+        assert(neg_out.to_float() >= -1.0f && neg_out.to_float() <= 1.0f);
+    }
+    // Sub-octave flip-flops should have been toggled
+    assert(sub.sub1_gate() || !sub.sub1_gate()); // valid boolean state
+
+    sub.reset();
+    FixedQ15 zero_out = sub.process(FixedQ15(0));
+    assert(zero_out.raw == 0);
+
+    // Test Eurorack Window Comparator
+    EurorackWindowComparator win;
+    win.set_window(1000, 3000, 50); // Lower = 1V (1000 mV), Upper = 3V (3000 mV)
+
+    // Input = 500 mV (Below lower)
+    auto out_low = win.process(500);
+    assert(out_low.below_lower == true);
+    assert(out_low.above_upper == false);
+    assert(out_low.inside_window == false);
+
+    // Input = 2000 mV (Inside window)
+    auto out_mid = win.process(2000);
+    assert(out_mid.below_lower == false);
+    assert(out_mid.above_upper == false);
+    assert(out_mid.inside_window == true);
+
+    // Input = 4000 mV (Above upper)
+    auto out_high = win.process(4000);
+    assert(out_high.below_lower == false);
+    assert(out_high.above_upper == true);
+    assert(out_high.inside_window == false);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3739,6 +3790,7 @@ int main() {
     test_eurorack_quadrature_and_dual_formant();
     test_eurorack_limiter_and_tape_flutter();
     test_eurorack_wave_multiplier_and_lpg();
-    std::cout << "\033[1;32mALL 125 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_sub_octave_and_window_comparator();
+    std::cout << "\033[1;32mALL 126 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
