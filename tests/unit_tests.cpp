@@ -120,6 +120,8 @@
 #include "aether/embedded/eurorack_clock_matrix.hpp"
 #include "aether/embedded/eurorack_switched_capacitor.hpp"
 #include "aether/embedded/eurorack_micro_looper.hpp"
+#include "aether/embedded/eurorack_dynamic_lpg.hpp"
+#include "aether/embedded/eurorack_frequency_shifter.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4133,6 +4135,42 @@ void test_eurorack_switched_cap_and_micro_looper() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_lpg_and_freq_shifter() {
+    std::cout << "[TEST] Embedded Eurorack Dynamic LPG & Frequency Shifter... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackDynamicLpg;
+    using aether::embedded::EurorackFrequencyShifter;
+
+    // 1. Test Dynamic Vactrol LPG
+    EurorackDynamicLpg lpg;
+    lpg.set_mode(EurorackDynamicLpg::Mode::Both);
+    lpg.strike(FixedQ15::from_float(0.95f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = (i % 40 < 20) ? 0.7f : -0.7f;
+        FixedQ15 in_s = FixedQ15::from_float(in_val);
+        // Slowly decaying CV
+        FixedQ15 cv_s = FixedQ15::from_float(0.8f * (500 - i) / 500.0f);
+        FixedQ15 out_s = lpg.process(in_s, cv_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    // 2. Test Bode Frequency Shifter
+    EurorackFrequencyShifter shifter;
+    shifter.set_shift_frequency(50.0f, 48000.0f); // 50 Hz shift
+
+    for (int i = 0; i < 500; ++i) {
+        float sine_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 100.0f);
+        FixedQ15 in_s = FixedQ15::from_float(sine_val * 0.7f);
+        auto out = shifter.process(in_s);
+        assert(out.upper_sideband.to_float() >= -1.0f && out.upper_sideband.to_float() <= 1.0f);
+        assert(out.lower_sideband.to_float() >= -1.0f && out.lower_sideband.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4271,6 +4309,7 @@ int main() {
     test_eurorack_physical_string_and_animator();
     test_eurorack_harmonizer_and_clock_matrix();
     test_eurorack_switched_cap_and_micro_looper();
-    std::cout << "\033[1;32mALL 136 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_lpg_and_freq_shifter();
+    std::cout << "\033[1;32mALL 137 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
