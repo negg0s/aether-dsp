@@ -136,6 +136,8 @@
 #include "aether/embedded/eurorack_multiband_follower.hpp"
 #include "aether/embedded/eurorack_dual_harmonizer.hpp"
 #include "aether/embedded/eurorack_chord_memory.hpp"
+#include "aether/embedded/eurorack_downward_expander.hpp"
+#include "aether/embedded/eurorack_flanger.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4479,6 +4481,48 @@ void test_eurorack_dual_harmonizer_and_chord_memory() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_expander_and_flanger() {
+    std::cout << "[TEST] Embedded Eurorack Downward Expander & Flanger... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackDownwardExpander;
+    using aether::embedded::EurorackFlanger;
+
+    // 1. Test Downward Expander
+    EurorackDownwardExpander exp;
+    exp.set_threshold(FixedQ15::from_float(0.3f));
+
+    // High input: passes through with minimal attenuation
+    for (int i = 0; i < 200; ++i) {
+        FixedQ15 hi_in = FixedQ15::from_float(0.8f);
+        FixedQ15 hi_out = exp.process(hi_in);
+        assert(hi_out.to_float() >= 0.0f && hi_out.to_float() <= 1.0f);
+    }
+
+    // Low input (below threshold): suppressed
+    FixedQ15 last_low_out = FixedQ15::from_raw(0);
+    for (int i = 0; i < 200; ++i) {
+        FixedQ15 lo_in = FixedQ15::from_float(0.05f);
+        last_low_out = exp.process(lo_in);
+    }
+    assert(last_low_out.to_float() < 0.05f); // Downward expanded
+
+    // 2. Test Flanger
+    EurorackFlanger flanger;
+    flanger.set_rate(1.0f, 48000.0f);
+    flanger.set_depth(100);
+    flanger.set_feedback(FixedQ15::from_float(0.4f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 50.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.7f);
+        FixedQ15 out_s = flanger.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4625,6 +4669,7 @@ int main() {
     test_eurorack_octave_doubler_and_polarizer();
     test_eurorack_phase_pitch_and_multiband_follower();
     test_eurorack_dual_harmonizer_and_chord_memory();
-    std::cout << "\033[1;32mALL 144 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_expander_and_flanger();
+    std::cout << "\033[1;32mALL 145 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
