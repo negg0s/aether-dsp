@@ -134,6 +134,8 @@
 #include "aether/embedded/eurorack_polarizer_utility.hpp"
 #include "aether/embedded/eurorack_phase_pitch_shifter.hpp"
 #include "aether/embedded/eurorack_multiband_follower.hpp"
+#include "aether/embedded/eurorack_dual_harmonizer.hpp"
+#include "aether/embedded/eurorack_chord_memory.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4435,6 +4437,48 @@ void test_eurorack_phase_pitch_and_multiband_follower() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_dual_harmonizer_and_chord_memory() {
+    std::cout << "[TEST] Embedded Eurorack Dual Pitch Harmonizer & Chord Memory... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackDualPitchHarmonizer;
+    using aether::embedded::EurorackChordMemory;
+
+    // 1. Test Dual Pitch Harmonizer
+    EurorackDualPitchHarmonizer harm;
+    harm.set_pitch_a(7.0f);  // +7 semitones (fifth)
+    harm.set_pitch_b(-5.0f); // -5 semitones (fourth down)
+    harm.set_feedback(FixedQ15::from_float(0.3f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 60.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.7f);
+        auto out = harm.process(in_s);
+        assert(out.voice_a.to_float() >= -1.0f && out.voice_a.to_float() <= 1.0f);
+        assert(out.voice_b.to_float() >= -1.0f && out.voice_b.to_float() <= 1.0f);
+        assert(out.mix_out.to_float() >= -1.0f && out.mix_out.to_float() <= 1.0f);
+    }
+
+    // 2. Test Chord Memory & Arpeggiator
+    EurorackChordMemory chord;
+    chord.set_chord(0, 4, 7, 11); // Major 7th [0, 4, 7, 11]
+    chord.set_arp_mode(EurorackChordMemory::ArpMode::Up);
+
+    // Root note at 0 mV (C)
+    auto out0 = chord.process(0, FixedQ15::from_raw(20000));
+    // Voice 1 = 0 mV, Voice 2 = 4 semitones (333 mV), Voice 3 = 7 semitones (583 mV)
+    assert(out0.voice1_mV == 0);
+    assert(std::abs(out0.voice2_mV - 333) <= 2);
+    assert(std::abs(out0.voice3_mV - 583) <= 2);
+    assert(out0.arp_out_mV >= 0);
+
+    // Clock arp step
+    auto out1 = chord.process(0, FixedQ15::from_raw(20000));
+    assert(out1.arp_out_mV >= 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4580,6 +4624,7 @@ int main() {
     test_eurorack_drum_and_crossfader();
     test_eurorack_octave_doubler_and_polarizer();
     test_eurorack_phase_pitch_and_multiband_follower();
-    std::cout << "\033[1;32mALL 143 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_dual_harmonizer_and_chord_memory();
+    std::cout << "\033[1;32mALL 144 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
