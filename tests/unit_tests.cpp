@@ -138,6 +138,8 @@
 #include "aether/embedded/eurorack_chord_memory.hpp"
 #include "aether/embedded/eurorack_downward_expander.hpp"
 #include "aether/embedded/eurorack_flanger.hpp"
+#include "aether/embedded/eurorack_just_quantizer.hpp"
+#include "aether/embedded/eurorack_ducking_vca.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4523,6 +4525,46 @@ void test_eurorack_expander_and_flanger() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_just_quantizer_and_ducking_vca() {
+    std::cout << "[TEST] Embedded Eurorack Just Quantizer & Ducking VCA... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackJustQuantizer;
+    using aether::embedded::EurorackDuckingVca;
+
+    // 1. Test Just Intonation Quantizer
+    EurorackJustQuantizer jq;
+    jq.set_root(0);
+
+    // Exact fifth in Just Intonation is 3/2 = 701.96 cents = 585 mV
+    // Input 590 mV should quantize to 585 mV
+    int16_t q_fifth = jq.process(590);
+    assert(q_fifth == 585);
+
+    // Exact fourth is 4/3 = 498.04 cents = 415 mV
+    int16_t q_fourth = jq.process(420);
+    assert(q_fourth == 415);
+
+    // 2. Test Ducking VCA
+    EurorackDuckingVca duck;
+    duck.set_duck_depth(FixedQ15::from_float(0.8f)); // 80% ducking
+
+    FixedQ15 in_sig = FixedQ15::from_float(0.5f);
+
+    // Initial state: un-ducked
+    FixedQ15 un_ducked = duck.process(in_sig);
+    assert(std::abs(un_ducked.to_float() - 0.5f) < 0.05f);
+
+    // Trigger sidechain kick
+    duck.trigger_sidechain(FixedQ15::from_float(0.95f));
+
+    // Ducked output should be suppressed significantly
+    FixedQ15 ducked_out = duck.process(in_sig);
+    assert(ducked_out.to_float() < 0.25f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4670,6 +4712,7 @@ int main() {
     test_eurorack_phase_pitch_and_multiband_follower();
     test_eurorack_dual_harmonizer_and_chord_memory();
     test_eurorack_expander_and_flanger();
-    std::cout << "\033[1;32mALL 145 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_just_quantizer_and_ducking_vca();
+    std::cout << "\033[1;32mALL 146 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
