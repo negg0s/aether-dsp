@@ -142,6 +142,8 @@
 #include "aether/embedded/eurorack_ducking_vca.hpp"
 #include "aether/embedded/eurorack_quarter_tone.hpp"
 #include "aether/embedded/eurorack_harmonic_tremolo.hpp"
+#include "aether/embedded/eurorack_bohlen_pierce.hpp"
+#include "aether/embedded/eurorack_octave_fuzz.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4602,6 +4604,38 @@ void test_eurorack_quarter_tone_and_harmonic_tremolo() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_bohlen_pierce_and_octave_fuzz() {
+    std::cout << "[TEST] Embedded Eurorack Bohlen-Pierce Quantizer & Octave Fuzz... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackBohlenPierceQuantizer;
+    using aether::embedded::EurorackOctaveFuzz;
+
+    // 1. Test Bohlen-Pierce Quantizer
+    EurorackBohlenPierceQuantizer bp;
+    // 0 mV -> 0 mV
+    assert(bp.process(0) == 0);
+    // 1 Tritave (1585 mV) -> 1585 mV
+    assert(bp.process(1585) == 1585);
+    // 1 Step is ~122 mV
+    int16_t step1 = bp.process(125);
+    assert(step1 == 121);
+
+    // 2. Test Octave Fuzz
+    EurorackOctaveFuzz fuzz;
+    fuzz.set_drive(FixedQ15::from_float(0.9f));
+    fuzz.set_tone_scoop(true);
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 50.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.7f);
+        FixedQ15 out_s = fuzz.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4751,6 +4785,7 @@ int main() {
     test_eurorack_expander_and_flanger();
     test_eurorack_just_quantizer_and_ducking_vca();
     test_eurorack_quarter_tone_and_harmonic_tremolo();
-    std::cout << "\033[1;32mALL 147 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_bohlen_pierce_and_octave_fuzz();
+    std::cout << "\033[1;32mALL 148 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
