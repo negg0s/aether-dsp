@@ -116,6 +116,8 @@
 #include "aether/embedded/eurorack_burst_generator.hpp"
 #include "aether/embedded/eurorack_physical_string.hpp"
 #include "aether/embedded/eurorack_wave_animator.hpp"
+#include "aether/embedded/eurorack_scale_harmonizer.hpp"
+#include "aether/embedded/eurorack_clock_matrix.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4038,6 +4040,52 @@ void test_eurorack_physical_string_and_animator() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_harmonizer_and_clock_matrix() {
+    std::cout << "[TEST] Embedded Eurorack Scale Harmonizer & Clock Matrix... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackScaleHarmonizer;
+    using aether::embedded::EurorackClockMatrix;
+
+    // 1. Test Scale Harmonizer / Quantizer
+    EurorackScaleHarmonizer quantizer;
+    quantizer.set_scale(EurorackScaleHarmonizer::Scale::PentatonicMinor);
+    quantizer.set_root(0); // C
+
+    // Quantize 0 mV -> C (0 mV)
+    int16_t q0 = quantizer.process(0);
+    assert(q0 == 0);
+
+    // Quantize 1000 mV (1 Octave up) -> C (1000 mV)
+    int16_t q_oct = quantizer.process(1000);
+    assert(q_oct == 1000);
+
+    // Quantize continuous sweep across 3 octaves
+    for (int16_t mv = -2000; mv <= 2000; mv += 25) {
+        int16_t out_mv = quantizer.process(mv);
+        assert(out_mv >= -2500 && out_mv <= 2500);
+    }
+
+    // 2. Test Clock Matrix & Logic Core
+    EurorackClockMatrix matrix;
+    matrix.set_divisions(1, 2, 4, 8);
+    matrix.set_logic_op(EurorackClockMatrix::LogicOp::And);
+
+    // Send 32 clock pulses
+    for (int tick = 0; tick < 32; ++tick) {
+        // High pulse
+        auto res_hi = matrix.process(FixedQ15::from_raw(20000));
+        assert(res_hi.out1.to_float() >= 0.0f);
+        assert(res_hi.logic_out.to_float() >= 0.0f);
+
+        // Low pulse
+        auto res_lo = matrix.process(FixedQ15::from_raw(0));
+        assert(res_lo.out1.to_float() >= 0.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4174,6 +4222,7 @@ int main() {
     test_eurorack_vocoder_and_pll();
     test_eurorack_diode_ladder_and_burst_gen();
     test_eurorack_physical_string_and_animator();
-    std::cout << "\033[1;32mALL 134 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_harmonizer_and_clock_matrix();
+    std::cout << "\033[1;32mALL 135 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
