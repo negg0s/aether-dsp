@@ -100,6 +100,8 @@
 #include "aether/embedded/eurorack_low_pass_gate.hpp"
 #include "aether/embedded/eurorack_sub_octave.hpp"
 #include "aether/embedded/eurorack_window_comparator.hpp"
+#include "aether/embedded/eurorack_wave_terrain.hpp"
+#include "aether/embedded/eurorack_chaos.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3663,6 +3665,42 @@ void test_eurorack_sub_octave_and_window_comparator() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_wave_terrain_and_chaos() {
+    std::cout << "[TEST] Embedded Eurorack Wave Terrain & Chaotic Attractor... ";
+    using aether::embedded::EurorackWaveTerrain;
+    using aether::embedded::EurorackChaosAttractor;
+    using aether::math::FixedQ15;
+
+    // Test Eurorack Wave Terrain Synthesis
+    EurorackWaveTerrain terrain;
+    terrain.configure(FixedQ15::from_float(0.8f), 2000000, 2828427);
+
+    for (int i = 0; i < 200; ++i) {
+        FixedQ15 sample = terrain.process();
+        assert(sample.to_float() >= -1.0f && sample.to_float() <= 1.0f);
+    }
+
+    // Evaluate explicit grid points
+    FixedQ15 origin_z = terrain.evaluate(FixedQ15(0), FixedQ15(0));
+    assert(origin_z.raw == 0);
+
+    FixedQ15 corner_z = terrain.evaluate(FixedQ15::from_float(0.7f), FixedQ15::from_float(0.7f));
+    assert(corner_z.to_float() >= -1.0f && corner_z.to_float() <= 1.0f);
+
+    // Test Eurorack Chaotic Attractor
+    EurorackChaosAttractor chaos;
+    chaos.set_speed(FixedQ15::from_float(0.05f));
+
+    for (int i = 0; i < 500; ++i) {
+        auto out = chaos.step();
+        assert(out.x.to_float() >= -1.0f && out.x.to_float() <= 1.0f);
+        assert(out.y.to_float() >= -1.0f && out.y.to_float() <= 1.0f);
+        assert(out.z.to_float() >= -1.0f && out.z.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3791,6 +3829,7 @@ int main() {
     test_eurorack_limiter_and_tape_flutter();
     test_eurorack_wave_multiplier_and_lpg();
     test_eurorack_sub_octave_and_window_comparator();
-    std::cout << "\033[1;32mALL 126 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_wave_terrain_and_chaos();
+    std::cout << "\033[1;32mALL 127 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
