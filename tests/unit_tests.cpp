@@ -86,6 +86,8 @@
 #include "aether/embedded/eurorack_calibrator.hpp"
 #include "aether/embedded/eurorack_vector_panner.hpp"
 #include "aether/embedded/eurorack_wavefolder.hpp"
+#include "aether/embedded/eurorack_bernoulli.hpp"
+#include "aether/embedded/eurorack_euclidean.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3287,6 +3289,73 @@ void test_eurorack_vector_panner_and_wavefolder() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_bernoulli_and_euclidean() {
+    std::cout << "[TEST] Embedded Eurorack Bernoulli Gate & Euclidean Rhythm Clock... ";
+    using aether::embedded::EurorackBernoulliGate;
+    using aether::embedded::EurorackEuclideanClock;
+
+    // Test Bernoulli Gate
+    EurorackBernoulliGate bg;
+    // 100% to A
+    bg.set_probability(100);
+    auto out100 = bg.process(true);
+    assert(out100.gate_a == true);
+    assert(out100.gate_b == false);
+    (void)bg.process(false);
+
+    // 0% to A (100% to B)
+    bg.set_probability(0);
+    auto out0 = bg.process(true);
+    assert(out0.gate_a == false);
+    assert(out0.gate_b == true);
+    (void)bg.process(false);
+
+    // 50% split over 200 pulses -> both A and B should trigger
+    bg.set_probability(50);
+    int count_a = 0;
+    int count_b = 0;
+    for (int i = 0; i < 200; ++i) {
+        auto out = bg.process(true);
+        if (out.gate_a) count_a++;
+        if (out.gate_b) count_b++;
+        (void)bg.process(false);
+    }
+    assert(count_a > 40 && count_a < 160);
+    assert(count_b > 40 && count_b < 160);
+
+    // Test Euclidean Rhythm Generator
+    EurorackEuclideanClock euclid;
+    // 4 pulses in 16 steps -> 4 on the floor (steps 0, 4, 8, 12)
+    euclid.configure(16, 4, 0);
+    uint32_t mask = euclid.pattern_bitmask();
+    // Count active bits
+    int bit_count = 0;
+    for (int i = 0; i < 16; ++i) {
+        if ((mask & (1U << i)) != 0) bit_count++;
+    }
+    assert(bit_count == 4);
+
+    // E(5, 8) -> famous Cuban tresillo / cinquillo rhythm
+    euclid.configure(8, 5, 0);
+    uint32_t mask_cinquillo = euclid.pattern_bitmask();
+    int c_count = 0;
+    for (int i = 0; i < 8; ++i) {
+        if ((mask_cinquillo & (1U << i)) != 0) c_count++;
+    }
+    assert(c_count == 5);
+
+    // Run clock ticks
+    int trigger_count = 0;
+    for (int i = 0; i < 1000; ++i) {
+        if (euclid.tick()) {
+            trigger_count++;
+        }
+    }
+    assert(trigger_count > 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3408,6 +3477,7 @@ int main() {
     test_eurorack_slew_and_sample_hold();
     test_eurorack_matrix_mixer_and_calibrator();
     test_eurorack_vector_panner_and_wavefolder();
-    std::cout << "\033[1;32mALL 119 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_bernoulli_and_euclidean();
+    std::cout << "\033[1;32mALL 120 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
