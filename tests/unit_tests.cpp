@@ -114,6 +114,8 @@
 #include "aether/embedded/eurorack_pll_core.hpp"
 #include "aether/embedded/eurorack_diode_ladder.hpp"
 #include "aether/embedded/eurorack_burst_generator.hpp"
+#include "aether/embedded/eurorack_physical_string.hpp"
+#include "aether/embedded/eurorack_wave_animator.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3995,6 +3997,47 @@ void test_eurorack_diode_ladder_and_burst_gen() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_physical_string_and_animator() {
+    std::cout << "[TEST] Embedded Eurorack Physical String & Wave Animator... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackPhysicalString;
+    using aether::embedded::EurorackWaveAnimator;
+
+    // 1. Test Physical Plucked String
+    EurorackPhysicalString string_synth;
+    string_synth.set_frequency(220.0f, 48000.0f);
+    string_synth.set_damping(FixedQ15::from_float(0.6f));
+    string_synth.set_pickup(FixedQ15::from_float(0.3f));
+
+    // Pluck the string
+    string_synth.trigger_pluck(FixedQ15::from_float(0.9f));
+
+    float energy_sum = 0.0f;
+    for (int i = 0; i < 2000; ++i) {
+        FixedQ15 s = string_synth.process();
+        assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+        energy_sum += std::abs(s.to_float());
+    }
+    assert(energy_sum > 1.0f); // Resonant oscillation occurred
+
+    // 2. Test Wave Animator
+    EurorackWaveAnimator animator;
+    animator.set_speed(2.0f, 48000.0f);
+    animator.set_depth(FixedQ15::from_float(0.6f));
+    animator.set_threshold(FixedQ15::from_float(0.3f));
+
+    // Process a ramp wave
+    for (int i = 0; i < 500; ++i) {
+        float ramp = (static_cast<float>(i % 100) / 50.0f) - 1.0f;
+        FixedQ15 in_s = FixedQ15::from_float(ramp * 0.7f);
+        FixedQ15 out_s = animator.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4130,6 +4173,7 @@ int main() {
     test_eurorack_wavetable_and_grains();
     test_eurorack_vocoder_and_pll();
     test_eurorack_diode_ladder_and_burst_gen();
-    std::cout << "\033[1;32mALL 133 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_physical_string_and_animator();
+    std::cout << "\033[1;32mALL 134 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
