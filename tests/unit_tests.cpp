@@ -76,6 +76,8 @@
 #include "aether/math/fixed_vibrato.hpp"
 #include "aether/math/fixed_ring_buffer.hpp"
 #include "aether/embedded/daisy_midi.hpp"
+#include "aether/embedded/daisy_oled.hpp"
+#include "aether/embedded/eurorack_sequencer.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2918,6 +2920,94 @@ void test_fixed_spsc_queue_and_midi_parser() {
     std::cout << "PASSED\n";
 }
 
+void test_daisy_oled_and_eurorack_sequencer() {
+    std::cout << "[TEST] Embedded Daisy OLED Display & Eurorack Quad Sequencer... ";
+    using aether::embedded::DaisyOledDisplay;
+    using aether::embedded::EurorackStepSequencer;
+    using aether::math::FixedQ15;
+
+    // Test Daisy OLED framebuffer primitives
+    DaisyOledDisplay oled;
+    assert(oled.buffer_size() == 1024);
+
+    // Initial buffer should be clear
+    for (size_t i = 0; i < oled.buffer_size(); ++i) {
+        assert(oled.raw_buffer()[i] == 0);
+    }
+
+    // Set pixel
+    oled.draw_pixel(10, 20, true);
+    assert(oled.get_pixel(10, 20));
+    assert(!oled.get_pixel(11, 20));
+
+    // Clear pixel
+    oled.draw_pixel(10, 20, false);
+    assert(!oled.get_pixel(10, 20));
+
+    // Draw horizontal and vertical lines
+    oled.draw_hline(0, 0, 128, true);
+    for (int x = 0; x < 128; ++x) {
+        assert(oled.get_pixel(x, 0));
+    }
+    oled.draw_vline(64, 0, 64, true);
+    for (int y = 0; y < 64; ++y) {
+        assert(oled.get_pixel(64, y));
+    }
+
+    // Draw audio waveform into OLED framebuffer
+    std::array<FixedQ15, 128> wave;
+    for (size_t i = 0; i < 128; ++i) {
+        wave[i] = FixedQ15::from_float(std::sin(2.0f * 3.14159265f * i / 32.0f));
+    }
+    oled.clear();
+    oled.draw_waveform(wave.data(), wave.size(), 32, 28);
+    // Ensure pixels were drawn around center
+    bool has_drawn_pixels = false;
+    for (size_t i = 0; i < oled.buffer_size(); ++i) {
+        if (oled.raw_buffer()[i] != 0) {
+            has_drawn_pixels = true;
+            break;
+        }
+    }
+    assert(has_drawn_pixels);
+
+    // Test Eurorack Quad Step Sequencer
+    EurorackStepSequencer seq;
+    seq.set_sequence_length(8);
+
+    // Configure step 1 (C4 = 2000 mV, gate 50%, prob 100%)
+    seq.set_step(0, 1, 2000, FixedQ15::from_float(0.9f), 50, 100);
+    // Configure step 2 (E4 = 2333 mV, gate 25%, prob 100%)
+    seq.set_step(0, 2, 2333, FixedQ15::from_float(0.7f), 25, 100);
+
+    // Clock step 0 -> 1
+    auto out1 = seq.tick(true, 0, 24);
+    assert(seq.current_step() == 1);
+    assert(out1.cv_millivolts == 2000);
+    assert(out1.gate == true);
+
+    // Tick within gate length (subtick < 50% of 24 = 12)
+    for (int i = 0; i < 10; ++i) {
+        auto sub = seq.tick(false, 0, 24);
+        assert(sub.gate == true);
+    }
+
+    // Tick past gate length (subtick >= 12) shuts gate off
+    for (int i = 0; i < 5; ++i) {
+        (void)seq.tick(false, 0, 24);
+    }
+    auto sub_off = seq.tick(false, 0, 24);
+    assert(sub_off.gate == false);
+
+    // Clock step 1 -> 2
+    auto out2 = seq.tick(true, 0, 24);
+    assert(seq.current_step() == 2);
+    assert(out2.cv_millivolts == 2333);
+    assert(out2.gate == true);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3034,6 +3124,7 @@ int main() {
     test_fixed_shepard_phaser_and_autowah();
     test_fixed_leslie_and_vibrato();
     test_fixed_spsc_queue_and_midi_parser();
-    std::cout << "\033[1;32mALL 114 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_daisy_oled_and_eurorack_sequencer();
+    std::cout << "\033[1;32mALL 115 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
