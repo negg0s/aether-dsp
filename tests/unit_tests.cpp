@@ -148,6 +148,8 @@
 #include "aether/embedded/eurorack_opto_compressor.hpp"
 #include "aether/embedded/eurorack_raga_quantizer.hpp"
 #include "aether/embedded/eurorack_sustainer_fuzz.hpp"
+#include "aether/embedded/eurorack_slendro_pelog.hpp"
+#include "aether/embedded/eurorack_analog_ring_vca.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4707,6 +4709,60 @@ void test_eurorack_raga_and_sustainer_fuzz() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_gamelan_and_ring_vca() {
+    std::cout << "[TEST] Embedded Eurorack Gamelan (Slendro/Pelog) & Analog Ring VCA... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackSlendroPelog;
+    using aether::embedded::GamelanMode;
+    using aether::embedded::EurorackAnalogRingVca;
+
+    // 1. Test Gamelan Quantizer
+    EurorackSlendroPelog gamelan;
+    
+    // Test Slendro (5-tone equidistant ~240 cents = 200 mV per step)
+    gamelan.set_mode(GamelanMode::Slendro);
+    assert(gamelan.process(0) == 0);
+    assert(gamelan.process(180) == 200);
+    assert(gamelan.process(390) == 400);
+    assert(gamelan.process(610) == 600);
+    assert(gamelan.process(820) == 800);
+    assert(gamelan.process(980) == 1000);
+
+    // Test Pelog (7-tone)
+    gamelan.set_mode(GamelanMode::Pelog);
+    gamelan.reset();
+    assert(gamelan.process(0) == 0);
+    // Near 100 mV (first degree)
+    assert(gamelan.process(95) == 100);
+    // Near 225 mV (second degree)
+    assert(gamelan.process(230) == 225);
+
+    // 2. Test Analog Ring VCA
+    EurorackAnalogRingVca ring;
+    ring.set_carrier_bleed(0);
+    ring.set_diode_knee(500);
+    ring.set_vca_level(32767); // unity gain
+
+    // Test ring modulation processing
+    for (int i = 0; i < 500; ++i) {
+        float sig_f = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 40.0f);
+        float car_f = std::cos(2.0f * 3.14159f * static_cast<float>(i) / 15.0f);
+        int16_t sig_s = FixedQ15::from_float(sig_f * 0.8f).raw;
+        int16_t car_s = FixedQ15::from_float(car_f * 0.8f).raw;
+
+        int16_t out_s = ring.process(sig_s, car_s);
+        assert(out_s >= -32768 && out_s <= 32767);
+    }
+
+    // Test VCA zero attenuation
+    ring.set_vca_level(0);
+    int16_t silenced = ring.process(16000, 16000);
+    assert(silenced == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4859,6 +4915,7 @@ int main() {
     test_eurorack_bohlen_pierce_and_octave_fuzz();
     test_eurorack_maqam_and_opto_compressor();
     test_eurorack_raga_and_sustainer_fuzz();
-    std::cout << "\033[1;32mALL 150 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_gamelan_and_ring_vca();
+    std::cout << "\033[1;32mALL 151 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
