@@ -92,6 +92,8 @@
 #include "aether/embedded/eurorack_envelope_follower.hpp"
 #include "aether/embedded/eurorack_sallen_key.hpp"
 #include "aether/embedded/eurorack_ring_mod.hpp"
+#include "aether/embedded/eurorack_quadrature.hpp"
+#include "aether/embedded/eurorack_dual_formant.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3464,6 +3466,50 @@ void test_eurorack_sallen_key_and_ring_mod() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_quadrature_and_dual_formant() {
+    std::cout << "[TEST] Embedded Eurorack Quadrature Oscillator & Dual Formant Filter... ";
+    using aether::embedded::EurorackQuadratureOscillator;
+    using aether::embedded::EurorackDualFormantFilter;
+    using aether::math::FixedQ15;
+
+    // Test Quadrature Oscillator
+    EurorackQuadratureOscillator quad;
+    quad.set_frequency(FixedQ15::from_float(0.08f));
+
+    // Process 200 samples and check cosine/sine bounds and quadrature orthogonality
+    for (int i = 0; i < 200; ++i) {
+        auto out = quad.process();
+        assert(out.cosine.to_float() >= -1.0f && out.cosine.to_float() <= 1.0f);
+        assert(out.sine.to_float() >= -1.0f && out.sine.to_float() <= 1.0f);
+    }
+
+    // Reset test
+    quad.reset();
+    auto reset_out = quad.process();
+    // After reset, cos starts near 1.0 and sin near 0.0
+    assert(reset_out.cosine.to_float() > 0.9f);
+    assert(std::abs(reset_out.sine.to_float()) < 0.15f);
+
+    // Test Dual Formant Filter
+    EurorackDualFormantFilter formant;
+    // Band 1: F1 formant
+    formant.configure_band(0, 4000, -8000, 3000);
+    // Band 2: F2 formant
+    formant.configure_band(1, 4000, -4000, 2000);
+    formant.set_blend(FixedQ15::from_float(0.5f));
+
+    for (int i = 0; i < 100; ++i) {
+        FixedQ15 out = formant.process(FixedQ15::from_float(0.7f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    formant.reset();
+    FixedQ15 silence = formant.process(FixedQ15(0));
+    assert(silence.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3588,6 +3634,7 @@ int main() {
     test_eurorack_bernoulli_and_euclidean();
     test_eurorack_clock_mult_and_envelope_follower();
     test_eurorack_sallen_key_and_ring_mod();
-    std::cout << "\033[1;32mALL 122 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_quadrature_and_dual_formant();
+    std::cout << "\033[1;32mALL 123 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
