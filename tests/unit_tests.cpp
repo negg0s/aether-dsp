@@ -126,6 +126,8 @@
 #include "aether/embedded/eurorack_turing_machine.hpp"
 #include "aether/embedded/eurorack_chebyshev_shaper.hpp"
 #include "aether/embedded/eurorack_pitch_tracker.hpp"
+#include "aether/embedded/eurorack_pulsar_synth.hpp"
+#include "aether/embedded/eurorack_analog_shift_reg.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4266,6 +4268,49 @@ void test_eurorack_chebyshev_and_pitch_tracker() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_pulsar_and_asr() {
+    std::cout << "[TEST] Embedded Eurorack Pulsar Synth & Analog Shift Register... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackPulsarSynth;
+    using aether::embedded::EurorackAnalogShiftRegister;
+
+    // 1. Test Pulsar Generator
+    EurorackPulsarSynth pulsar;
+    pulsar.set_fundamental(100.0f, 48000.0f);
+    pulsar.set_formant(800.0f, 48000.0f);
+    pulsar.set_duty_cycle(FixedQ15::from_float(0.4f));
+    pulsar.set_window_type(EurorackPulsarSynth::WindowType::SineBell);
+
+    size_t non_zero_count = 0;
+    for (int i = 0; i < 1000; ++i) {
+        FixedQ15 s = pulsar.process();
+        assert(s.to_float() >= -1.0f && s.to_float() <= 1.0f);
+        if (s.raw != 0) non_zero_count++;
+    }
+    // Verify that pulses were produced interspersed with silence
+    assert(non_zero_count > 100 && non_zero_count < 900);
+
+    // 2. Test Analog Shift Register
+    EurorackAnalogShiftRegister asr;
+    asr.set_glide(FixedQ15::from_float(0.0f)); // instant snap
+
+    // Send clock 1 with 1000 mV
+    asr.process(1000, FixedQ15::from_raw(20000));
+    auto o1 = asr.process(1000, FixedQ15::from_raw(0));
+    assert(o1.out1_mV == 1000);
+    assert(o1.out2_mV == 0);
+
+    // Send clock 2 with 2000 mV
+    asr.process(2000, FixedQ15::from_raw(20000));
+    auto o2 = asr.process(2000, FixedQ15::from_raw(0));
+    assert(o2.out1_mV == 2000);
+    assert(o2.out2_mV == 1000);
+    assert(o2.out3_mV == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4407,6 +4452,7 @@ int main() {
     test_eurorack_lpg_and_freq_shifter();
     test_eurorack_resonator_bank_and_turing_machine();
     test_eurorack_chebyshev_and_pitch_tracker();
-    std::cout << "\033[1;32mALL 139 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_pulsar_and_asr();
+    std::cout << "\033[1;32mALL 140 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
