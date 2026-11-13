@@ -112,6 +112,8 @@
 #include "aether/embedded/eurorack_grains.hpp"
 #include "aether/embedded/eurorack_vocoder.hpp"
 #include "aether/embedded/eurorack_pll_core.hpp"
+#include "aether/embedded/eurorack_diode_ladder.hpp"
+#include "aether/embedded/eurorack_burst_generator.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3951,6 +3953,48 @@ void test_eurorack_vocoder_and_pll() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_diode_ladder_and_burst_gen() {
+    std::cout << "[TEST] Embedded Eurorack Diode Ladder & Burst Generator... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackDiodeLadder;
+    using aether::embedded::EurorackBurstGenerator;
+
+    // 1. Test Diode Ladder Filter
+    EurorackDiodeLadder ladder;
+    ladder.set_cutoff(1000.0f, 48000.0f);
+    ladder.set_resonance(FixedQ15::from_float(0.7f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_f = (i % 50 < 25) ? 0.8f : -0.8f;
+        FixedQ15 in_s = FixedQ15::from_float(in_f);
+        FixedQ15 out_s = ladder.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    // 2. Test Burst Generator
+    EurorackBurstGenerator burst;
+    burst.configure(4, 200, EurorackBurstGenerator::SpacingMode::Linear, 50);
+
+    // Send trigger pulse
+    auto res0 = burst.process(FixedQ15::from_raw(20000));
+    assert(res0.is_active);
+
+    size_t active_samples = 0;
+    bool saw_eob = false;
+
+    for (int i = 0; i < 1500; ++i) {
+        auto res = burst.process(FixedQ15::from_raw(0));
+        if (res.burst_gate.raw > 0) active_samples++;
+        if (res.eob_pulse.raw > 0) saw_eob = true;
+    }
+
+    assert(active_samples > 0);
+    assert(saw_eob);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4085,6 +4129,7 @@ int main() {
     test_eurorack_attenuverter_and_macro_osc();
     test_eurorack_wavetable_and_grains();
     test_eurorack_vocoder_and_pll();
-    std::cout << "\033[1;32mALL 132 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_diode_ladder_and_burst_gen();
+    std::cout << "\033[1;32mALL 133 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
