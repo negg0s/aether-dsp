@@ -104,6 +104,8 @@
 #include "aether/embedded/eurorack_chaos.hpp"
 #include "aether/embedded/eurorack_bbd_chorus.hpp"
 #include "aether/embedded/eurorack_cv_slicer.hpp"
+#include "aether/embedded/eurorack_diode_fuzz.hpp"
+#include "aether/embedded/eurorack_slope_gen.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3753,6 +3755,59 @@ void test_eurorack_bbd_chorus_and_cv_slicer() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_diode_fuzz_and_slope_gen() {
+    std::cout << "[TEST] Embedded Eurorack Diode Fuzz & Multi-Curve Slope Generator... ";
+    using aether::embedded::EurorackDiodeFuzz;
+    using aether::embedded::EurorackSlopeGenerator;
+    using aether::math::FixedQ15;
+
+    // Test Eurorack Diode Fuzz
+    EurorackDiodeFuzz fuzz;
+    fuzz.configure(FixedQ15::from_float(3.0f), FixedQ15::from_float(0.1f), true); // Germanium mode
+
+    // Hot input signals should be clipped
+    for (int i = 0; i < 50; ++i) {
+        FixedQ15 out = fuzz.process(FixedQ15::from_float(0.8f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    fuzz.reset();
+    FixedQ15 zero_out = fuzz.process(FixedQ15(0));
+    assert(zero_out.to_float() >= -1.0f && zero_out.to_float() <= 1.0f);
+
+    // Test Eurorack Slope Generator (ADSR / Loop Function Generator)
+    EurorackSlopeGenerator slope;
+    slope.configure(1000, 500, 16000, 400, EurorackSlopeGenerator::Shape::Linear);
+
+    // Trigger Gate ON: Attack phase (takes ~33 steps to reach 32767)
+    bool hit_eor = false;
+    for (int i = 0; i < 40; ++i) {
+        auto out = slope.process(true);
+        if (out.end_of_rise) hit_eor = true;
+        assert(out.cv_out.to_float() >= 0.0f && out.cv_out.to_float() <= 1.0f);
+    }
+    assert(hit_eor); // Reached peak and transitioned to Decay/Sustain
+
+    // Run decay phase until reaching sustain level (16000)
+    for (int i = 0; i < 40; ++i) {
+        (void)slope.process(true);
+    }
+
+    // Sustain level
+    auto sust_out = slope.process(true);
+    assert(std::abs(sust_out.cv_out.to_float() - (16000.0f / 32768.0f)) < 0.05f);
+
+    // Gate OFF: Release phase
+    bool hit_eoc = false;
+    for (int i = 0; i < 50; ++i) {
+        auto out = slope.process(false);
+        if (out.end_of_cycle) hit_eoc = true;
+    }
+    assert(hit_eoc); // Reached 0 and became Idle
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3883,6 +3938,7 @@ int main() {
     test_eurorack_sub_octave_and_window_comparator();
     test_eurorack_wave_terrain_and_chaos();
     test_eurorack_bbd_chorus_and_cv_slicer();
-    std::cout << "\033[1;32mALL 128 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_diode_fuzz_and_slope_gen();
+    std::cout << "\033[1;32mALL 129 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
