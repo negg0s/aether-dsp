@@ -144,6 +144,8 @@
 #include "aether/embedded/eurorack_harmonic_tremolo.hpp"
 #include "aether/embedded/eurorack_bohlen_pierce.hpp"
 #include "aether/embedded/eurorack_octave_fuzz.hpp"
+#include "aether/embedded/eurorack_maqam_quantizer.hpp"
+#include "aether/embedded/eurorack_opto_compressor.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4636,6 +4638,38 @@ void test_eurorack_bohlen_pierce_and_octave_fuzz() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_maqam_and_opto_compressor() {
+    std::cout << "[TEST] Embedded Eurorack Maqam Quantizer & Opto Compressor... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackMaqamQuantizer;
+    using aether::embedded::EurorackOptoCompressor;
+
+    // 1. Test Maqam Rast Quantizer
+    EurorackMaqamQuantizer mq;
+    mq.set_maqam(EurorackMaqamQuantizer::Maqam::Rast);
+
+    // 0 mV -> 0 mV (Tonic)
+    assert(mq.process(0) == 0);
+    // Neutral third (sikah) in Rast is 350 cents = 292 mV
+    int16_t sikah = mq.process(300);
+    assert(sikah == 292);
+
+    // 2. Test Opto Compressor
+    EurorackOptoCompressor opto;
+    opto.set_peak_reduction(FixedQ15::from_float(0.7f));
+    opto.set_makeup_gain(FixedQ15::from_float(0.6f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 50.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.8f);
+        FixedQ15 out_s = opto.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4786,6 +4820,7 @@ int main() {
     test_eurorack_just_quantizer_and_ducking_vca();
     test_eurorack_quarter_tone_and_harmonic_tremolo();
     test_eurorack_bohlen_pierce_and_octave_fuzz();
-    std::cout << "\033[1;32mALL 148 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_maqam_and_opto_compressor();
+    std::cout << "\033[1;32mALL 149 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
