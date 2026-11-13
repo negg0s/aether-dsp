@@ -146,6 +146,8 @@
 #include "aether/embedded/eurorack_octave_fuzz.hpp"
 #include "aether/embedded/eurorack_maqam_quantizer.hpp"
 #include "aether/embedded/eurorack_opto_compressor.hpp"
+#include "aether/embedded/eurorack_raga_quantizer.hpp"
+#include "aether/embedded/eurorack_sustainer_fuzz.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4670,6 +4672,41 @@ void test_eurorack_maqam_and_opto_compressor() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_raga_and_sustainer_fuzz() {
+    std::cout << "[TEST] Embedded Eurorack Indian Raga Quantizer & Sustainer Fuzz... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackRagaQuantizer;
+    using aether::embedded::EurorackSustainerFuzz;
+
+    // 1. Test Indian Raga Bhairav Quantizer
+    EurorackRagaQuantizer rq;
+    rq.set_raga(EurorackRagaQuantizer::Raga::Bhairav);
+
+    // 0 mV -> 0 mV (Sa)
+    assert(rq.process(0) == 0);
+    // Komal Re in Bhairav is 112 cents = 93 mV
+    int16_t komal_re = rq.process(100);
+    assert(komal_re == 93);
+    // Shuddha Pa (perfect fifth) is 702 cents = 585 mV
+    int16_t pa = rq.process(600);
+    assert(pa == 585);
+
+    // 2. Test Sustainer Fuzz (Big Muff style)
+    EurorackSustainerFuzz fuzz;
+    fuzz.set_sustain(FixedQ15::from_float(0.9f));
+    fuzz.set_tone(FixedQ15::from_float(0.5f)); // center tone
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 60.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.7f);
+        FixedQ15 out_s = fuzz.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4821,6 +4858,7 @@ int main() {
     test_eurorack_quarter_tone_and_harmonic_tremolo();
     test_eurorack_bohlen_pierce_and_octave_fuzz();
     test_eurorack_maqam_and_opto_compressor();
-    std::cout << "\033[1;32mALL 149 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_raga_and_sustainer_fuzz();
+    std::cout << "\033[1;32mALL 150 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
