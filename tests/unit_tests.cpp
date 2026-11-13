@@ -74,6 +74,8 @@
 #include "aether/math/fixed_autowah.hpp"
 #include "aether/math/fixed_leslie.hpp"
 #include "aether/math/fixed_vibrato.hpp"
+#include "aether/math/fixed_ring_buffer.hpp"
+#include "aether/embedded/daisy_midi.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2805,6 +2807,117 @@ void test_fixed_leslie_and_vibrato() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_spsc_queue_and_midi_parser() {
+    std::cout << "[TEST] Embedded Lock-Free FixedSpscQueue & DaisyMidiParser... ";
+    using aether::math::FixedSpscQueue;
+    using aether::embedded::DaisyMidiParser;
+    using aether::embedded::MidiEvent;
+    using aether::embedded::MidiMessageType;
+
+    // Test FixedSpscQueue lock-free queue
+    FixedSpscQueue<int16_t, 8> queue;
+    assert(queue.empty());
+    assert(!queue.full());
+    assert(queue.size() == 0);
+
+    for (int16_t i = 1; i <= 7; ++i) {
+        bool pushed = queue.push(i * 100);
+        assert(pushed);
+    }
+    assert(queue.size() == 7);
+    assert(!queue.full());
+
+    // 8th item fills queue to capacity
+    bool pushed_8 = queue.push(800);
+    assert(pushed_8);
+    assert(queue.full());
+
+    // 9th item rejected
+    bool pushed_9 = queue.push(900);
+    assert(!pushed_9);
+
+    // Pop first 4 items
+    for (int16_t i = 1; i <= 4; ++i) {
+        int16_t val = 0;
+        bool popped = queue.pop(val);
+        assert(popped);
+        assert(val == i * 100);
+    }
+    assert(queue.size() == 4);
+
+    // Push 2 more items (wrap-around in circular ring)
+    assert(queue.push(900));
+    assert(queue.push(1000));
+    assert(queue.size() == 6);
+
+    // Pop all remaining items
+    int16_t expected[] = {500, 600, 700, 800, 900, 1000};
+    for (int i = 0; i < 6; ++i) {
+        int16_t val = 0;
+        assert(queue.pop(val));
+        assert(val == expected[i]);
+    }
+    assert(queue.empty());
+
+    // Test DaisyMidiParser
+    DaisyMidiParser parser;
+    MidiEvent ev;
+
+    // Test NoteOn (channel 1 -> 0x90, note 60, velocity 100)
+    assert(!parser.parse_byte(0x90, ev));
+    assert(!parser.parse_byte(60, ev));
+    assert(parser.parse_byte(100, ev));
+    assert(ev.type == MidiMessageType::NoteOn);
+    assert(ev.channel == 0);
+    assert(ev.data1 == 60);
+    assert(ev.data2 == 100);
+
+    // Test Running Status (next note on without status byte)
+    assert(!parser.parse_byte(64, ev));
+    assert(parser.parse_byte(110, ev));
+    assert(ev.type == MidiMessageType::NoteOn);
+    assert(ev.channel == 0);
+    assert(ev.data1 == 64);
+    assert(ev.data2 == 110);
+
+    // Test Note On with velocity 0 converts to Note Off
+    assert(!parser.parse_byte(60, ev));
+    assert(parser.parse_byte(0, ev));
+    assert(ev.type == MidiMessageType::NoteOff);
+    assert(ev.channel == 0);
+    assert(ev.data1 == 60);
+    assert(ev.data2 == 0);
+
+    // Test Control Change (channel 2 -> 0xB1, CC 74, value 85)
+    assert(!parser.parse_byte(0xB1, ev));
+    assert(!parser.parse_byte(74, ev));
+    assert(parser.parse_byte(85, ev));
+    assert(ev.type == MidiMessageType::ControlChange);
+    assert(ev.channel == 1);
+    assert(ev.data1 == 74);
+    assert(ev.data2 == 85);
+
+    // Test Pitch Bend 14-bit (channel 0 -> 0xE0, LSB=0, MSB=64 -> center = 8192 - 8192 = 0)
+    assert(!parser.parse_byte(0xE0, ev));
+    assert(!parser.parse_byte(0x00, ev));
+    assert(parser.parse_byte(0x40, ev)); // 64 << 7 = 8192
+    assert(ev.type == MidiMessageType::PitchBend);
+    assert(ev.value14 == 0);
+
+    // Pitch bend max (LSB=0x7F, MSB=0x7F -> 16383 - 8192 = 8191)
+    assert(!parser.parse_byte(0x7F, ev));
+    assert(parser.parse_byte(0x7F, ev));
+    assert(ev.type == MidiMessageType::PitchBend);
+    assert(ev.value14 == 8191);
+
+    // Test Real-Time Clock interleaving (0xF8)
+    assert(parser.parse_byte(0xF8, ev));
+    assert(ev.type == MidiMessageType::SystemRealTime);
+    assert(ev.data1 == 0xF8);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2920,6 +3033,7 @@ int main() {
     test_fixed_comb_chorus_and_tape_saturator();
     test_fixed_shepard_phaser_and_autowah();
     test_fixed_leslie_and_vibrato();
-    std::cout << "\033[1;32mALL 113 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_spsc_queue_and_midi_parser();
+    std::cout << "\033[1;32mALL 114 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
