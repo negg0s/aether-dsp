@@ -124,6 +124,8 @@
 #include "aether/embedded/eurorack_frequency_shifter.hpp"
 #include "aether/embedded/eurorack_resonator_bank.hpp"
 #include "aether/embedded/eurorack_turing_machine.hpp"
+#include "aether/embedded/eurorack_chebyshev_shaper.hpp"
+#include "aether/embedded/eurorack_pitch_tracker.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -4222,6 +4224,48 @@ void test_eurorack_resonator_bank_and_turing_machine() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_chebyshev_and_pitch_tracker() {
+    std::cout << "[TEST] Embedded Eurorack Chebyshev Shaper & Pitch Tracker... ";
+
+    using FixedQ15 = aether::math::FixedQ15;
+    using aether::embedded::EurorackChebyshevShaper;
+    using aether::embedded::EurorackPitchTracker;
+
+    // 1. Test Chebyshev Harmonic Shaper
+    EurorackChebyshevShaper shaper;
+    // Set pure 2nd harmonic (octave doubler)
+    shaper.set_harmonics(FixedQ15::from_float(0.0f),  // H1
+                         FixedQ15::from_float(1.0f),  // H2
+                         FixedQ15::from_float(0.0f),  // H3
+                         FixedQ15::from_float(0.0f),  // H4
+                         FixedQ15::from_float(0.0f)); // H5
+    shaper.set_drive(FixedQ15::from_float(1.0f));
+
+    for (int i = 0; i < 500; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * static_cast<float>(i) / 100.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.8f);
+        FixedQ15 out_s = shaper.process(in_s);
+        assert(out_s.to_float() >= -1.0f && out_s.to_float() <= 1.0f);
+    }
+
+    // 2. Test Pitch Tracker
+    EurorackPitchTracker tracker;
+    // Feed 440 Hz test tone (period = 48000 / 440 = ~109 samples)
+    for (int i = 0; i < 2000; ++i) {
+        float in_val = std::sin(2.0f * 3.14159f * 440.0f * static_cast<float>(i) / 48000.0f);
+        FixedQ15 in_s = FixedQ15::from_float(in_val * 0.8f);
+        auto res = tracker.process(in_s, 48000.0f);
+        if (i > 1000) {
+            // Signal gate is active
+            assert(res.gate_out.raw > 0);
+            // Detected pitch should be close to 440 Hz (+/- 25 Hz tolerance for discrete zero crossings)
+            assert(res.freq_hz >= 415 && res.freq_hz <= 465);
+        }
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -4362,6 +4406,7 @@ int main() {
     test_eurorack_switched_cap_and_micro_looper();
     test_eurorack_lpg_and_freq_shifter();
     test_eurorack_resonator_bank_and_turing_machine();
-    std::cout << "\033[1;32mALL 138 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_chebyshev_and_pitch_tracker();
+    std::cout << "\033[1;32mALL 139 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
