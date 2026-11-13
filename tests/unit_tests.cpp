@@ -80,6 +80,8 @@
 #include "aether/embedded/eurorack_sequencer.hpp"
 #include "aether/embedded/eurorack_quantizer.hpp"
 #include "aether/embedded/eurorack_logic.hpp"
+#include "aether/embedded/eurorack_slew.hpp"
+#include "aether/embedded/eurorack_sample_hold.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3084,6 +3086,86 @@ void test_eurorack_quantizer_and_logic() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_slew_and_sample_hold() {
+    std::cout << "[TEST] Embedded Eurorack Slew Limiter & Precision S&H/T&H... ";
+    using aether::embedded::EurorackSlewLimiter;
+    using aether::embedded::EurorackSampleAndHold;
+
+    EurorackSlewLimiter slew;
+    slew.set_rates(100, 200, EurorackSlewLimiter::Curve::Linear);
+
+    // Target 1000 mV from 0 mV with rise rate 100 mV per sample (takes 10 steps)
+    for (int i = 1; i <= 9; ++i) {
+        auto out = slew.process(1000);
+        assert(out.cv_out_mv == i * 100);
+        assert(!out.end_of_rise);
+    }
+    auto reach_target = slew.process(1000);
+    assert(reach_target.cv_out_mv == 1000);
+    assert(reach_target.end_of_rise);
+
+    // Fall back to 0 mV with fall rate 200 mV per sample (takes 5 steps)
+    for (int i = 1; i <= 4; ++i) {
+        auto out = slew.process(0);
+        assert(out.cv_out_mv == 1000 - i * 200);
+        assert(!out.end_of_fall);
+    }
+    auto reach_zero = slew.process(0);
+    assert(reach_zero.cv_out_mv == 0);
+    assert(reach_zero.end_of_fall);
+
+    // Self-cycle mode (Function Generator LFO)
+    slew.reset();
+    slew.set_rates(500, 500);
+    slew.set_cycle(true);
+    for (int i = 0; i < 30; ++i) {
+        auto cyc = slew.process(0);
+        assert(cyc.cv_out_mv >= 0 && cyc.cv_out_mv <= 5000);
+    }
+
+    // Test Eurorack Precision Sample and Hold
+    EurorackSampleAndHold sh;
+    // Input is 3000 mV, clock is LOW -> held is 0
+    assert(sh.process_sample_and_hold(3000, false) == 0);
+
+    // Clock goes HIGH -> triggers sample
+    assert(sh.process_sample_and_hold(3000, true) == 3000);
+
+    // Input changes to 4500 mV, clock remains HIGH -> stays held at 3000 mV
+    assert(sh.process_sample_and_hold(4500, true) == 3000);
+
+    // Clock goes LOW -> still held at 3000 mV
+    assert(sh.process_sample_and_hold(5000, false) == 3000);
+
+    // Next rising edge samples new value 5000 mV
+    assert(sh.process_sample_and_hold(5000, true) == 5000);
+
+    // Test Track & Hold
+    sh.reset();
+    // Gate HIGH: tracks input exactly
+    assert(sh.process_track_and_hold(1500, true) == 1500);
+    assert(sh.process_track_and_hold(2700, true) == 2700);
+
+    // Gate LOW: freezes at last tracked value
+    assert(sh.process_track_and_hold(4000, false) == 2700);
+    assert(sh.process_track_and_hold(100, false) == 2700);
+
+    // Gate HIGH again: resumes tracking
+    assert(sh.process_track_and_hold(800, true) == 800);
+
+    // Test Analog Capacitor Droop
+    sh.reset();
+    sh.set_droop(10, 5); // 10 mV dropped every 5 samples
+    (void)sh.process_sample_and_hold(1000, true);
+    assert(sh.held_value() == 1000);
+    for (int i = 0; i < 5; ++i) {
+        (void)sh.process_sample_and_hold(1000, false);
+    }
+    assert(sh.held_value() == 990); // 10 mV dropped
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3202,6 +3284,7 @@ int main() {
     test_fixed_spsc_queue_and_midi_parser();
     test_daisy_oled_and_eurorack_sequencer();
     test_eurorack_quantizer_and_logic();
-    std::cout << "\033[1;32mALL 116 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_slew_and_sample_hold();
+    std::cout << "\033[1;32mALL 117 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
