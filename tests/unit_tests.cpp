@@ -88,6 +88,8 @@
 #include "aether/embedded/eurorack_wavefolder.hpp"
 #include "aether/embedded/eurorack_bernoulli.hpp"
 #include "aether/embedded/eurorack_euclidean.hpp"
+#include "aether/embedded/eurorack_clock_mult.hpp"
+#include "aether/embedded/eurorack_envelope_follower.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -3356,6 +3358,63 @@ void test_eurorack_bernoulli_and_euclidean() {
     std::cout << "PASSED\n";
 }
 
+void test_eurorack_clock_mult_and_envelope_follower() {
+    std::cout << "[TEST] Embedded Eurorack PLL Clock Multiplier & Envelope Follower... ";
+    using aether::embedded::EurorackClockMultiplier;
+    using aether::embedded::EurorackEnvelopeFollower;
+    using aether::math::FixedQ15;
+
+    // Test Eurorack Clock Multiplier
+    EurorackClockMultiplier pll;
+    pll.set_multiplier(4); // x4 multiplier
+
+    // Feed periodic clock pulses (every 1000 samples)
+    int clock_out_count = 0;
+    for (int cycle = 0; cycle < 5; ++cycle) {
+        // Clock pulse
+        auto out = pll.process(true);
+        if (out.clock_out) clock_out_count++;
+
+        // Remainder of cycle
+        for (int s = 1; s < 1000; ++s) {
+            auto sub = pll.process(false);
+            if (sub.clock_out) clock_out_count++;
+        }
+    }
+    assert(pll.is_locked());
+    assert(clock_out_count > 10); // Multiple multiplied triggers fired
+
+    // Test Eurorack Envelope Follower
+    EurorackEnvelopeFollower ef;
+    ef.configure(FixedQ15::from_float(0.5f), FixedQ15::from_float(0.05f), 2000);
+
+    // Initial silence
+    for (int i = 0; i < 20; ++i) {
+        auto out = ef.process(FixedQ15(0));
+        assert(out.envelope.raw == 0);
+        assert(!out.transient_trigger);
+    }
+
+    // Sudden loud transient spike (0.9 amplitude)
+    auto spike_out = ef.process(FixedQ15::from_float(0.9f));
+    assert(spike_out.envelope.to_float() > 0.3f);
+    assert(spike_out.transient_trigger == true);
+
+    // Follow steady tone
+    for (int i = 0; i < 50; ++i) {
+        (void)ef.process(FixedQ15::from_float(0.8f));
+    }
+    assert(ef.envelope().to_float() > 0.7f);
+
+    // Decay during silence
+    for (int i = 0; i < 100; ++i) {
+        (void)ef.process(FixedQ15(0));
+    }
+    assert(ef.envelope().to_float() < 0.2f);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -3478,6 +3537,7 @@ int main() {
     test_eurorack_matrix_mixer_and_calibrator();
     test_eurorack_vector_panner_and_wavefolder();
     test_eurorack_bernoulli_and_euclidean();
-    std::cout << "\033[1;32mALL 120 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_eurorack_clock_mult_and_envelope_follower();
+    std::cout << "\033[1;32mALL 121 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
