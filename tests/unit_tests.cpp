@@ -72,6 +72,8 @@
 #include "aether/math/fixed_tape_saturator.hpp"
 #include "aether/math/fixed_shepard_phaser.hpp"
 #include "aether/math/fixed_autowah.hpp"
+#include "aether/math/fixed_leslie.hpp"
+#include "aether/math/fixed_vibrato.hpp"
 #include "aether/simd/neon_math.hpp"
 #include "aether/embedded/hardware_adapter.hpp"
 #include <iostream>
@@ -2760,6 +2762,49 @@ void test_fixed_shepard_phaser_and_autowah() {
     std::cout << "PASSED\n";
 }
 
+void test_fixed_leslie_and_vibrato() {
+    std::cout << "[TEST] Embedded Fixed-Point Leslie Rotary Speaker & True Pitch Vibrato... ";
+    using aether::math::FixedLeslieSpeaker;
+    using aether::math::FixedVibrato;
+    using aether::math::FixedQ15;
+
+    // Test Leslie Speaker Simulator
+    FixedLeslieSpeaker leslie;
+    leslie.set_speed(FixedLeslieSpeaker::Speed::Fast);
+
+    for (int i = 0; i < 500; ++i) {
+        auto out = leslie.process(FixedQ15::from_float(0.7f), FixedQ15::from_float(0.7f));
+        assert(out.left.to_float() >= -1.0f && out.left.to_float() <= 1.0f);
+        assert(out.right.to_float() >= -1.0f && out.right.to_float() <= 1.0f);
+    }
+
+    leslie.set_speed(FixedLeslieSpeaker::Speed::Brake);
+    for (int i = 0; i < 500; ++i) {
+        auto out = leslie.process(FixedQ15::from_float(0.5f), FixedQ15::from_float(0.5f));
+        assert(out.left.to_float() >= -1.0f && out.left.to_float() <= 1.0f);
+    }
+
+    leslie.reset();
+    auto l_silence = leslie.process(FixedQ15(0), FixedQ15(0));
+    assert(l_silence.left.raw == 0 && l_silence.right.raw == 0);
+
+    // Test True Pitch Vibrato
+    FixedVibrato vib;
+    uint32_t rate_inc = static_cast<uint32_t>((6ULL << 32) / 48000); // 6 Hz vibrato
+    vib.configure(rate_inc, 20);
+
+    for (int i = 0; i < 500; ++i) {
+        auto out = vib.process(FixedQ15::from_float(0.8f));
+        assert(out.to_float() >= -1.0f && out.to_float() <= 1.0f);
+    }
+
+    vib.reset();
+    auto v_silence = vib.process(FixedQ15(0));
+    assert(v_silence.raw == 0);
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -2874,6 +2919,7 @@ int main() {
     test_fixed_eq_and_sub_synth();
     test_fixed_comb_chorus_and_tape_saturator();
     test_fixed_shepard_phaser_and_autowah();
-    std::cout << "\033[1;32mALL 112 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_fixed_leslie_and_vibrato();
+    std::cout << "\033[1;32mALL 113 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }
