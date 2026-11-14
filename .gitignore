@@ -31,4 +31,8 @@ Thumbs.db
 *.dylib
 output/*.wav
 output/*.mid
-
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
