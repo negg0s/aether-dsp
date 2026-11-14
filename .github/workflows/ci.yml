@@ -40,13 +40,21 @@ jobs:
         run: |
           cmake --build build --config ${{ matrix.build_type }}
 
-      - name: Run Test Suite
-        run: |
-          ./build/aether-tests.exe || ctest --test-dir build --output-on-failure -V -C ${{ matrix.build_type }}
+      - name: Run Test Suite (Linux)
+        if: runner.os == 'Linux'
+        run: ctest --test-dir build --output-on-failure -V -C ${{ matrix.build_type }}
 
-      - name: Run Benchmark & Audio Renderer
-        run: |
-          ./build/aether-dsp || ./build/Release/aether-dsp.exe
+      - name: Run Test Suite (Windows)
+        if: runner.os == 'Windows'
+        run: .\build\aether-tests.exe
+
+      - name: Run Benchmark & Audio Renderer (Linux)
+        if: runner.os == 'Linux'
+        run: ./build/aether-dsp
+
+      - name: Run Benchmark & Audio Renderer (Windows)
+        if: runner.os == 'Windows'
+        run: .\build\aether-dsp.exe
 
   sanitizers:
     name: Memory & UB Sanitizers (Linux)
