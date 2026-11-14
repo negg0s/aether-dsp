@@ -111,10 +111,13 @@ private:
     uint32_t release_samples_{1000};
 
     [[nodiscard]] static constexpr FixedQ15 calculate_rate(uint32_t samples, FixedQ15 from, FixedQ15 to) noexcept {
-        samples = std::max<uint32_t>(1, samples);
-        const int32_t diff = std::abs(static_cast<int32_t>(to.raw) - static_cast<int32_t>(from.raw));
+        samples = samples > 0 ? samples : 1;
+        const int32_t from_val = static_cast<int32_t>(from.raw);
+        const int32_t to_val = static_cast<int32_t>(to.raw);
+        const int32_t diff = to_val >= from_val ? (to_val - from_val) : (from_val - to_val);
         const int32_t rate = diff / static_cast<int32_t>(samples);
-        return FixedQ15(static_cast<int16_t>(std::clamp<int32_t>(rate > 0 ? rate : 1, 1, 32767)));
+        const int32_t clamped_rate = rate > 32767 ? 32767 : (rate > 0 ? rate : 1);
+        return FixedQ15(static_cast<int16_t>(clamped_rate));
     }
 };
 
