@@ -41,6 +41,10 @@ add_executable(aether-tests
     tests/unit_tests.cpp
     src/c_api.cpp
 )
+if(MSVC)
+    target_link_options(aether-tests PRIVATE /STACK:8388608)
+    target_link_options(aether-dsp PRIVATE /STACK:8388608)
+endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(aether-dsp PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
