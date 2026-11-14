@@ -161,6 +161,7 @@
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
+#include <memory>
 
 #undef assert
 #define assert(expr) \
