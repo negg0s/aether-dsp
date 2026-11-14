@@ -87,7 +87,7 @@ public:
         // 4. Leaky Loop Filter (Proportional-Integral)
         loop_integrator_ += (phase_error * 8);
         // Passive bleeding back to center frequency
-        loop_integrator_ = (loop_integrator_ * 32700) >> 15;
+        loop_integrator_ = static_cast<int32_t>((static_cast<int64_t>(loop_integrator_) * 32700) >> 15);
 
         // Compute instantaneous frequency increment
         int64_t total_inc = static_cast<int64_t>(center_freq_inc_) + (static_cast<int64_t>(loop_integrator_) * 1024);

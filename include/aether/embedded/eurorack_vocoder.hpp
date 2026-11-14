@@ -122,12 +122,30 @@ private:
 
     // Chamberlin SVF single bandpass filter tick (Q14 arithmetic)
     inline int32_t process_biquad(int32_t in, int32_t& s1, int32_t& s2, int16_t k, int16_t r) {
+        // Clamp inputs/states to prevent int32 overflow in extreme resonant conditions
+        if (s1 > 1073741824) s1 = 1073741824;
+        if (s1 < -1073741824) s1 = -1073741824;
+        if (s2 > 1073741824) s2 = 1073741824;
+        if (s2 < -1073741824) s2 = -1073741824;
+
         // hp = in - s1 - r * s2
-        int32_t hp = in - (s1 >> 14) - ((static_cast<int64_t>(r) * (s2 >> 14)) >> 14);
+        int64_t r_term = (static_cast<int64_t>(r) * (s2 >> 14)) >> 14;
+        int64_t hp64 = static_cast<int64_t>(in) - (s1 >> 14) - r_term;
+        if (hp64 > 32767) hp64 = 32767;
+        if (hp64 < -32768) hp64 = -32768;
+        int32_t hp = static_cast<int32_t>(hp64);
+
         // bp = s2 + k * hp
-        int32_t bp = s2 + static_cast<int32_t>((static_cast<int64_t>(k) * hp));
+        int64_t bp64 = static_cast<int64_t>(s2) + (static_cast<int64_t>(k) * hp);
+        if (bp64 > 1073741824) bp64 = 1073741824;
+        if (bp64 < -1073741824) bp64 = -1073741824;
+        int32_t bp = static_cast<int32_t>(bp64);
+
         // lp = s1 + k * bp
-        int32_t lp = s1 + static_cast<int32_t>((static_cast<int64_t>(k) * (bp >> 14)));
+        int64_t lp64 = static_cast<int64_t>(s1) + ((static_cast<int64_t>(k) * (bp >> 14)));
+        if (lp64 > 1073741824) lp64 = 1073741824;
+        if (lp64 < -1073741824) lp64 = -1073741824;
+        int32_t lp = static_cast<int32_t>(lp64);
 
         s1 = lp;
         s2 = bp;

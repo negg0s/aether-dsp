@@ -93,7 +93,7 @@ public:
         int32_t s_high = interpolate_hermite(bank_high, table_idx, frac_q15);
 
         // Crossfade between bank_low and bank_high
-        int32_t cross = s_low + (((s_high - s_low) * bank_frac) >> 15);
+        int32_t cross = s_low + static_cast<int32_t>((static_cast<int64_t>(s_high - s_low) * bank_frac) >> 15);
         if (cross > 32767) cross = 32767;
         if (cross < -32768) cross = -32768;
 
