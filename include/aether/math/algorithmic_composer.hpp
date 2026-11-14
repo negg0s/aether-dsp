@@ -21,7 +21,7 @@ struct NoteEvent {
 /**
  * @brief Algorithmic Generative Counterpoint Engine (Zero AI, Pure Math).
  *
- * Utilizes Iannis Xenakis Sieve Theory, Fibonacci modulo arithmetic,
+ * Uses Iannis Xenakis Sieve Theory, Fibonacci modulo arithmetic,
  * and Golden Ratio (phi) temporal spacing to generate deterministic polyphonic scores.
  */
 class AlgorithmicComposer {

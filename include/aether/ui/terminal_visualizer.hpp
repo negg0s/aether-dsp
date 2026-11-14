@@ -13,7 +13,7 @@ namespace aether::ui {
 /**
  * @brief High-Resolution Terminal Unicode Braille & ANSI TrueColor Visualizer.
  *
- * Utilizes Unicode Braille Patterns (U+2800..U+28FF) where each character cell
+ * Uses Unicode Braille Patterns (U+2800..U+28FF) where each character cell
  * represents a 2x4 sub-pixel dot matrix, providing a 160x80+ graphical canvas
  * directly inside modern command-line terminals with zero dependencies.
  */

@@ -18,7 +18,7 @@ namespace aether::simd {
 
 /**
  * @brief Portable 4-wide 32-bit float SIMD vector for cross-platform DSP.
- * Automatically utilizes ARM NEON (arm64, Raspberry Pi, Daisy/Cortex-M7) or SSE/scalar fallback.
+ * Automatically uses ARM NEON (arm64, Raspberry Pi, Daisy/Cortex-M7) or SSE/scalar fallback.
  */
 struct Float4 {
 #if AETHER_HAS_NEON

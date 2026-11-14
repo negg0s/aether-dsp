@@ -1014,8 +1014,8 @@ void test_kdv_soliton_lattice() {
     std::cout << "PASSED\n";
 }
 
-void test_midi_parser_robustness() {
-    std::cout << "[TEST] MIDI Parser Boundary & Truncation Robustness... ";
+void test_midi_parser_resilience() {
+    std::cout << "[TEST] MIDI Parser Boundary & Truncation Resilience... ";
     const std::string tmp_bad_midi = "test_truncated.mid";
     {
         std::ofstream out(tmp_bad_midi, std::ios::binary);
@@ -1033,7 +1033,7 @@ void test_midi_parser_robustness() {
     std::cout << "PASSED\n";
 }
 
-void test_wav_reader_robustness() {
+void test_wav_reader_resilience() {
     std::cout << "[TEST] WAV Parser Division-by-Zero & Chunk Validation... ";
     const std::string tmp_bad_wav = "test_bad.wav";
     {
@@ -1347,7 +1347,7 @@ void test_partitioned_convolution_reset() {
 }
 
 void test_pseudosphere_horn_extreme_params() {
-    std::cout << "[TEST] Pseudosphere Horn Parameter Robustness... ";
+    std::cout << "[TEST] Pseudosphere Horn Parameter Boundaries... ";
     aether::engines::PseudosphereHorn::Config cfg;
     cfg.horn_length_m = -10.0f; // Negative length must be clamped safely
     cfg.speed_of_sound = -343.0f; // Negative speed of sound
@@ -4929,8 +4929,8 @@ int main() {
     test_topological_metamaterial();
     test_kdv_soliton_lattice();
     test_engine_presets();
-    test_midi_parser_robustness();
-    test_wav_reader_robustness();
+    test_midi_parser_resilience();
+    test_wav_reader_resilience();
     test_hyperbolic_string_high_pitches();
     test_monophonic_note_off_decay();
     test_composer_sorted_events();
