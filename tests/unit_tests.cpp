@@ -708,8 +708,8 @@ void test_henon_heiles_chaos() {
 }
 
 void test_engine_presets() {
-    std::cout << "[TEST] Master Engine 14-Preset Complete Audio Rendering... ";
-    aether::Engine engine(48000);
+    std::cout << "[TEST] Master Engine 14-Preset Complete Audio Rendering... " << std::flush;
+    auto engine = std::make_unique<aether::Engine>(48000);
     std::vector<aether::StereoFrame> block(256);
 
     const aether::Preset presets[] = {
@@ -730,9 +730,9 @@ void test_engine_presets() {
     };
 
     for (auto preset : presets) {
-        engine.load_preset(preset);
-        engine.note_on({0.2f, 0.3f}, 0.8f);
-        engine.process_block(block);
+        engine->load_preset(preset);
+        engine->note_on({0.2f, 0.3f}, 0.8f);
+        engine->process_block(block);
 
         for (const auto& frame : block) {
             assert(!std::isnan(frame.left) && !std::isnan(frame.right));
@@ -743,10 +743,10 @@ void test_engine_presets() {
     }
 
     // Test polyphonic note routing
-    engine.poly_note_on(60, 0.8f);
-    engine.poly_note_on(64, 0.8f);
-    engine.process_block(block);
-    engine.all_notes_off();
+    engine->poly_note_on(60, 0.8f);
+    engine->poly_note_on(64, 0.8f);
+    engine->process_block(block);
+    engine->all_notes_off();
 
     std::cout << "PASSED\n";
 }
@@ -1095,23 +1095,23 @@ void test_hyperbolic_string_high_pitches() {
 }
 
 void test_monophonic_note_off_decay() {
-    std::cout << "[TEST] Monophonic note_off() Envelope Sound Release... ";
-    aether::Engine engine(48000);
-    engine.load_preset(aether::Preset::HyperbolicCosmicBell);
-    engine.reverb().configure(0.0f, 0.0f, 0.0f); // zero reverb to isolate synth envelope release
-    engine.envelope().configure(0.001f, 0.05f, 0.8f, 0.02f, 48000.0f);
-    engine.note_on({0.3f, 0.4f}, 0.9f);
+    std::cout << "[TEST] Monophonic note_off() Envelope Sound Release... " << std::flush;
+    auto engine = std::make_unique<aether::Engine>(48000);
+    engine->load_preset(aether::Preset::HyperbolicCosmicBell);
+    engine->reverb().configure(0.0f, 0.0f, 0.0f); // zero reverb to isolate synth envelope release
+    engine->envelope().configure(0.001f, 0.05f, 0.8f, 0.02f, 48000.0f);
+    engine->note_on({0.3f, 0.4f}, 0.9f);
 
     std::vector<aether::StereoFrame> block(256);
-    engine.process_block(block);
+    engine->process_block(block);
     float energy_active = 0.0f;
     for (const auto& f : block) energy_active += std::abs(f.left) + std::abs(f.right);
     assert(energy_active > 0.001f);
 
-    engine.note_off();
+    engine->note_off();
     // Render to allow release stage to complete (0.02s release = 960 samples ~ 4 blocks)
     for (int i = 0; i < 50; ++i) {
-        engine.process_block(block);
+        engine->process_block(block);
     }
 
     float energy_released = 0.0f;
@@ -1430,7 +1430,7 @@ void test_binaural_panner_high_sample_rate() {
 }
 
 void test_stick_slip_finite_force() {
-    std::cout << "[TEST] Stick-Slip Exciter Non-Finite Input Handling... ";
+    std::cout << "[TEST] Stick-Slip Exciter Non-Finite Input Handling... " << std::flush;
     aether::engines::StickSlipExciter exciter;
     exciter.configure(0.8f, 0.3f, 4.0f);
 
@@ -1445,13 +1445,13 @@ void test_stick_slip_finite_force() {
 }
 
 void test_engine_reset() {
-    std::cout << "[TEST] Master Engine Full Reset to Silence... ";
-    aether::Engine engine(48000);
-    engine.load_preset(aether::Preset::HyperbolicCosmicBell);
-    engine.note_on({0.3f, 0.3f}, 0.9f);
+    std::cout << "[TEST] Master Engine Full Reset to Silence... " << std::flush;
+    auto engine = std::make_unique<aether::Engine>(48000);
+    engine->load_preset(aether::Preset::HyperbolicCosmicBell);
+    engine->note_on({0.3f, 0.3f}, 0.9f);
 
     std::vector<aether::StereoFrame> block(128);
-    engine.process_block(block);
+    engine->process_block(block);
 
     float energy = 0.0f;
     for (const auto& f : block) {
@@ -1460,8 +1460,8 @@ void test_engine_reset() {
     assert(energy > 0.01f);
 
     // Reset clears all sound
-    engine.reset();
-    engine.process_block(block);
+    engine->reset();
+    engine->process_block(block);
     float energy_after = 0.0f;
     for (const auto& f : block) {
         energy_after += std::abs(f.left) + std::abs(f.right);
@@ -1914,30 +1914,30 @@ void test_fixed_point_embedded() {
 }
 
 void test_embedded_hardware_adapter() {
-    std::cout << "[TEST] Embedded Hardware Knob/Button Adapter... ";
-    aether::Engine engine;
+    std::cout << "[TEST] Embedded Hardware Knob/Button Adapter... " << std::flush;
+    auto engine = std::make_unique<aether::Engine>();
     aether::embedded::EmbeddedHardwareAdapter adapter;
 
     // Turn knob 0 (preset) to max ADC (4095) -> Preset 13
-    adapter.update_adc_knob(0, 4095, engine);
-    assert(static_cast<int>(engine.current_preset()) == 13);
+    adapter.update_adc_knob(0, 4095, *engine);
+    assert(static_cast<int>(engine->current_preset()) == 13);
 
     // Turn knob 0 to 0 -> Preset 0
-    adapter.update_adc_knob(0, 0, engine);
-    assert(static_cast<int>(engine.current_preset()) == 0);
+    adapter.update_adc_knob(0, 0, *engine);
+    assert(static_cast<int>(engine->current_preset()) == 0);
 
     // Knob 4 (panning)
-    adapter.update_adc_knob(4, 2048, engine); // ~ 0.0 deg
+    adapter.update_adc_knob(4, 2048, *engine); // ~ 0.0 deg
     assert(std::abs(adapter.knob_value(4)) < 2.0f);
 
     // Button 2 (next preset)
-    adapter.handle_button_press(2, true, engine);
-    assert(static_cast<int>(engine.current_preset()) == 1);
-    adapter.handle_button_press(2, false, engine);
+    adapter.handle_button_press(2, true, *engine);
+    assert(static_cast<int>(engine->current_preset()) == 1);
+    adapter.handle_button_press(2, false, *engine);
 
     // Button 3 (reset)
-    adapter.handle_button_press(3, true, engine);
-    adapter.handle_button_press(3, false, engine);
+    adapter.handle_button_press(3, true, *engine);
+    adapter.handle_button_press(3, false, *engine);
 
     std::cout << "PASSED\n";
 }
@@ -4889,7 +4889,7 @@ void test_eurorack_granular_pitch_and_clock_mult_div() {
 }
 
 int main() {
-    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (69 Tests) ===\033[0m\n";
+    std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (154 Tests) ===\033[0m\n";
     test_ring_buffer();
     test_poincare_geometry();
     test_chladni_plate();
