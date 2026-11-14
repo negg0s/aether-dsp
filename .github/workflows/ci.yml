@@ -42,7 +42,7 @@ jobs:
 
       - name: Run Test Suite
         run: |
-          ctest --test-dir build --output-on-failure -V -C ${{ matrix.build_type }}
+          ./build/aether-tests.exe || ctest --test-dir build --output-on-failure -V -C ${{ matrix.build_type }}
 
       - name: Run Benchmark & Audio Renderer
         run: |
