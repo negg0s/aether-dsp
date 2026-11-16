@@ -22,6 +22,12 @@ public:
     constexpr ADSREnvelope() noexcept = default;
 
     void configure(float attack_sec, float decay_sec, float sustain_level, float release_sec, float sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE)) noexcept {
+        if (!std::isfinite(sample_rate) || sample_rate <= 0.0f) sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE);
+        if (!std::isfinite(sustain_level)) sustain_level = 0.7f;
+        if (!std::isfinite(attack_sec) || attack_sec <= 0.0f) attack_sec = 0.005f;
+        if (!std::isfinite(decay_sec) || decay_sec <= 0.0f) decay_sec = 0.8f;
+        if (!std::isfinite(release_sec) || release_sec <= 0.0f) release_sec = 1.2f;
+
         sample_rate_ = std::clamp(sample_rate, 1000.0f, 384000.0f);
         sustain_level_ = std::clamp(sustain_level, 0.0f, 1.0f);
         attack_sec_ = std::clamp(attack_sec, 0.0001f, 60.0f);
@@ -116,9 +122,10 @@ private:
     float release_rate_{0.001f};
 
     [[nodiscard]] float calculate_rate(float time_sec, float from, float to) const noexcept {
-        time_sec = std::max(0.001f, time_sec);
-        const float samples = time_sec * sample_rate_;
-        return std::abs(to - from) / samples;
+        time_sec = std::max(0.0001f, time_sec);
+        const float sr = (sample_rate_ > 0.0f) ? sample_rate_ : static_cast<float>(DEFAULT_SAMPLE_RATE);
+        const float samples = time_sec * sr;
+        return (samples > 0.0f) ? (std::abs(to - from) / samples) : 0.0f;
     }
 };
 

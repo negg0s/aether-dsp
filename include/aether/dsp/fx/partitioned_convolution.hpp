@@ -57,7 +57,8 @@ public:
         head_cursor_ = 0;
         const size_t head_count = std::min(BLOCK_SIZE, ir.size());
         for (size_t i = 0; i < head_count; ++i) {
-            head_ir_[i] = ir[i];
+            const float val = ir[i];
+            head_ir_[i] = std::isfinite(val) ? val : 0.0f;
         }
 
         // 2. Frequency-Domain Partitions for Tail (Partitions 1 .. P-1)
@@ -83,7 +84,8 @@ public:
             const size_t count = (start_idx < ir.size()) ? std::min(BLOCK_SIZE, ir.size() - start_idx) : 0;
 
             for (size_t i = 0; i < count; ++i) {
-                fft_buf[i] = Complex(ir[start_idx + i], 0.0f);
+                const float val = ir[start_idx + i];
+                fft_buf[i] = Complex(std::isfinite(val) ? val : 0.0f, 0.0f);
             }
 
             // Zero-padded forward FFT of partition
@@ -102,7 +104,9 @@ public:
     void load_impulse_response(std::span<const StereoFrame> ir_stereo, float wet_gain = 0.5f) {
         std::vector<float> mono(ir_stereo.size());
         for (size_t i = 0; i < ir_stereo.size(); ++i) {
-            mono[i] = (ir_stereo[i].left + ir_stereo[i].right) * 0.5f;
+            const float l = std::isfinite(ir_stereo[i].left) ? ir_stereo[i].left : 0.0f;
+            const float r = std::isfinite(ir_stereo[i].right) ? ir_stereo[i].right : 0.0f;
+            mono[i] = (l + r) * 0.5f;
         }
         load_impulse_response(mono, wet_gain);
     }

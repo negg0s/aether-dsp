@@ -4889,6 +4889,135 @@ void test_eurorack_granular_pitch_and_clock_mult_div() {
     std::cout << "PASSED\n";
 }
 
+void test_dsp_edge_case_resilience() {
+    std::cout << "[TEST] DSP Edge Case & Boundary Value Resilience... ";
+
+    // 1. Biquad zero / negative / NaN frequency and Q
+    {
+        aether::dsp::BiquadFilter bq;
+        bq.configure(aether::dsp::FilterType::Lowpass, 0.0f, 0.0f, 48000.0f);
+        float out1 = bq.process(1.0f);
+        assert(std::isfinite(out1));
+
+        bq.configure(aether::dsp::FilterType::Lowpass, -100.0f, -5.0f, 48000.0f);
+        float out2 = bq.process(1.0f);
+        assert(std::isfinite(out2));
+
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        bq.configure(aether::dsp::FilterType::Highpass, qnan, qnan, qnan);
+        bq.reset();
+        float out3 = bq.process(qnan);
+        assert(std::isfinite(out3));
+        assert(out3 == 0.0f);
+    }
+
+    // 2. ADSR Envelope zero / negative rates
+    {
+        aether::dsp::ADSREnvelope env;
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        env.configure(0.0f, -1.0f, qnan, 0.0f, 0.0f);
+        env.gate(true);
+        for (int i = 0; i < 100; ++i) {
+            float val = env.process();
+            assert(std::isfinite(val));
+        }
+    }
+
+    // 3. Tuning System zero / negative root frequency
+    {
+        aether::dsp::TuningSystem ts;
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        float f0 = ts.get_frequency(0, 0.0f);
+        assert(std::isfinite(f0) && f0 > 0.0f);
+        float fnan = ts.get_frequency(5, qnan);
+        assert(std::isfinite(fnan) && fnan > 0.0f);
+        float fneg = ts.get_frequency(-12, -440.0f);
+        assert(std::isfinite(fneg) && fneg > 0.0f);
+    }
+
+    // 4. KdV Soliton Lattice zero width & soliton bounds
+    {
+        aether::engines::KdvSolitonLattice kdv(48000);
+        kdv.configure(0.0f, 0.0f, 0.0f);
+        kdv.strike(0.5f, 1.0f, 0.0f); // zero width
+        auto frame1 = kdv.process();
+        assert(std::isfinite(frame1.left) && std::isfinite(frame1.right));
+
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        kdv.inject_soliton(qnan, qnan);
+        auto frame2 = kdv.process();
+        assert(std::isfinite(frame2.left) && std::isfinite(frame2.right));
+    }
+
+    // 5. Sine Gordon Breather zero width strike & bounds
+    {
+        aether::engines::SineGordonBreather sg(48000);
+        sg.configure(0.0f, 0.0f, 0.0f);
+        sg.strike(0.5f, 1.0f, 0.0f);
+        auto frame1 = sg.process();
+        assert(std::isfinite(frame1.left) && std::isfinite(frame1.right));
+
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        sg.inject_breather(qnan, qnan, qnan);
+        auto frame2 = sg.process();
+        assert(std::isfinite(frame2.left) && std::isfinite(frame2.right));
+    }
+
+    // 6. Chladni Plate zero frequency & NaN coordinates
+    {
+        aether::engines::ChladniPlate cp;
+        cp.configure(0.0f, 0.0f, 0.0f);
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        cp.strike({qnan, qnan}, qnan);
+        auto frame = cp.step({qnan, qnan}, {qnan, qnan});
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+    }
+
+    // 7. Pseudosphere Horn non-finite excitation & step
+    {
+        aether::engines::PseudosphereHorn horn(48000);
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        horn.excite_throat(qnan);
+        horn.blow(qnan, qnan, qnan);
+        auto frame = horn.step();
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+    }
+
+    // 8. Hyperbolic String zero pitch & NaN pluck
+    {
+        aether::engines::HyperbolicString hs(48000);
+        hs.set_pitch(0.0f);
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        hs.pluck(qnan, qnan, qnan);
+        auto frame = hs.step();
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+    }
+
+    // 9. Partitioned Convolution NaN IR resilience
+    {
+        aether::dsp::fx::PartitionedConvolution conv;
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        std::vector<float> bad_ir = {qnan, 0.5f, qnan, -0.2f};
+        conv.load_impulse_response(bad_ir);
+        auto frame = conv.process({1.0f, 1.0f});
+        assert(std::isfinite(frame.left) && std::isfinite(frame.right));
+    }
+
+    // 10. Engine master soft_clip NaN handling
+    {
+        aether::Engine eng(48000);
+        float qnan = std::numeric_limits<float>::quiet_NaN();
+        std::vector<aether::StereoFrame> buf(16, {qnan, qnan});
+        eng.process_block(buf);
+        for (const auto& f : buf) {
+            assert(std::isfinite(f.left));
+            assert(std::isfinite(f.right));
+        }
+    }
+
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "\033[1;36m=== Running AetherDSP Complete Invariant Suite (154 Tests) ===\033[0m\n";
     test_ring_buffer();
@@ -5045,6 +5174,7 @@ int main() {
     test_eurorack_harmonic_gen_and_dynamics_limiter();
     test_eurorack_formant_vowel_and_poisson_burst();
     test_eurorack_granular_pitch_and_clock_mult_div();
-    std::cout << "\033[1;32mALL 154 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
+    test_dsp_edge_case_resilience();
+    std::cout << "\033[1;32mALL 155 ADVANCED INVARIANT TESTS PASSED SUCCESSFULLY!\033[0m\n";
     return 0;
 }

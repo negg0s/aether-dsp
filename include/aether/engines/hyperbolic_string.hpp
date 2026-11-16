@@ -70,6 +70,7 @@ public:
     }
 
     void set_pitch(float hz) noexcept {
+        if (!std::isfinite(hz) || hz <= 0.0f) hz = 146.83f;
         config_.fundamental_hz = std::clamp(hz, 30.0f, 1200.0f);
         update_parameters();
     }
@@ -91,9 +92,13 @@ public:
      * @param width Spatial width of pluck triangle
      */
     void pluck(float position = 0.22f, float velocity = 0.85f, float width = 0.08f) noexcept {
-        const float pos_m = std::clamp(position, 0.05f, 0.95f) * config_.length_m;
-        const float w_m = std::clamp(width, 0.02f, 0.3f) * config_.length_m;
-        const float amp = velocity * 0.005f; // Physical displacement in meters
+        const float pos = std::isfinite(position) ? position : 0.22f;
+        const float vel = std::isfinite(velocity) ? velocity : 0.0f;
+        const float w = std::isfinite(width) ? width : 0.08f;
+
+        const float pos_m = std::clamp(pos, 0.05f, 0.95f) * config_.length_m;
+        const float w_m = std::clamp(w, 0.02f, 0.3f) * config_.length_m;
+        const float amp = vel * 0.005f; // Physical displacement in meters
 
         for (size_t i = 1; i < NUM_POINTS - 1; ++i) {
             const float x = i * dx_;
@@ -175,9 +180,12 @@ public:
         const float out_l = y_current_[PICKUP_L] * 80.0f;
         const float out_r = y_current_[PICKUP_R] * 80.0f;
 
+        const float safe_l = std::isfinite(out_l) ? std::tanh(out_l) : 0.0f;
+        const float safe_r = std::isfinite(out_r) ? std::tanh(out_r) : 0.0f;
+
         return StereoFrame{
-            std::tanh(out_l),
-            std::tanh(out_r)
+            safe_l,
+            safe_r
         };
     }
 

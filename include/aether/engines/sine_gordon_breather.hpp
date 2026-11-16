@@ -45,6 +45,9 @@ public:
      * @param damping Mechanical friction coefficient \gamma
      */
     void configure(float wave_speed = 0.42f, float potential_freq = 280.0f, float damping = 0.0008f) noexcept {
+        if (!std::isfinite(wave_speed)) wave_speed = 0.42f;
+        if (!std::isfinite(potential_freq) || potential_freq <= 0.0f) potential_freq = 280.0f;
+        if (!std::isfinite(damping)) damping = 0.0008f;
         c_ = std::clamp(wave_speed, 0.05f, 0.48f); // CFL stability bound < 0.5
         omega0_ = std::clamp(potential_freq, 20.0f, 4000.0f);
         damping_ = std::clamp(damping, 0.00005f, 0.02f);
@@ -57,6 +60,10 @@ public:
      * @param amplitude Excitation scaling
      */
     void inject_breather(float center = 0.5f, float internal_freq = 0.75f, float amplitude = 1.0f) noexcept {
+        if (!std::isfinite(center)) center = 0.5f;
+        if (!std::isfinite(internal_freq)) internal_freq = 0.75f;
+        if (!std::isfinite(amplitude)) amplitude = 1.0f;
+
         const float w = std::clamp(internal_freq, 0.15f, 0.95f);
         const float m = std::sqrt(1.0f - w * w);
         const float x0 = center * static_cast<float>(GRID_SIZE);
@@ -77,6 +84,9 @@ public:
      * @param velocity Relative approach speed \in (0.1, 0.9)
      */
     void inject_kink_antikink(float separation = 0.4f, float velocity = 0.6f) noexcept {
+        if (!std::isfinite(separation)) separation = 0.4f;
+        if (!std::isfinite(velocity)) velocity = 0.6f;
+
         const float v = std::clamp(velocity, 0.1f, 0.95f);
         const float gamma = 1.0f / std::sqrt(1.0f - v * v);
         const float d = separation * static_cast<float>(GRID_SIZE) * 0.5f;
@@ -101,8 +111,13 @@ public:
      * @param width Spatial Gaussian footprint
      */
     void strike(float coord = 0.5f, float velocity = 0.8f, float width = 0.04f) noexcept {
+        if (!std::isfinite(coord)) coord = 0.5f;
+        if (!std::isfinite(velocity)) velocity = 0.0f;
+        if (!std::isfinite(width) || width <= 0.0f) width = 0.04f;
+
         const float center = std::clamp(coord, 0.05f, 0.95f) * static_cast<float>(GRID_SIZE);
-        const float inv_sigma2 = 1.0f / (2.0f * width * width * static_cast<float>(GRID_SIZE * GRID_SIZE));
+        const float w = std::clamp(width, 0.001f, 1.0f);
+        const float inv_sigma2 = 1.0f / (2.0f * w * w * static_cast<float>(GRID_SIZE * GRID_SIZE));
 
         for (size_t i = 0; i < GRID_SIZE; ++i) {
             const float dx = static_cast<float>(i) - center;
@@ -142,7 +157,9 @@ public:
         phi_ = phi_next_;
         time_ += dt;
 
-        return {std::clamp(out_l * 1.8f, -1.0f, 1.0f), std::clamp(out_r * 1.8f, -1.0f, 1.0f)};
+        const float l_val = std::isfinite(out_l) ? std::clamp(out_l * 1.8f, -1.0f, 1.0f) : 0.0f;
+        const float r_val = std::isfinite(out_r) ? std::clamp(out_r * 1.8f, -1.0f, 1.0f) : 0.0f;
+        return {l_val, r_val};
     }
 
     void process_block(std::span<StereoFrame> output) noexcept {

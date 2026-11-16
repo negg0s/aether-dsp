@@ -78,6 +78,7 @@ public:
      * @brief Excite the throat of the pseudosphere horn with acoustic pressure.
      */
     void excite_throat(float pressure_pulse) {
+        if (!std::isfinite(pressure_pulse)) return;
         p_current_[0] += pressure_pulse;
         p_previous_[0] += pressure_pulse * 0.5f;
     }
@@ -86,9 +87,10 @@ public:
      * @brief Continuous non-linear lip-reed excitation at the horn throat.
      */
     void blow(float lip_pressure, float lip_frequency, float dt) {
+        if (!std::isfinite(lip_pressure) || !std::isfinite(lip_frequency) || !std::isfinite(dt)) return;
         lip_phase_ += lip_frequency * dt * 2.0f * std::numbers::pi_v<float>;
         if (lip_phase_ >= 2.0f * std::numbers::pi_v<float>) {
-            lip_phase_ -= 2.0f * std::numbers::pi_v<float>;
+            lip_phase_ = std::fmod(lip_phase_, 2.0f * std::numbers::pi_v<float>);
         }
 
         // Non-linear Bernoulli lip-aperture opening model
@@ -136,9 +138,12 @@ public:
         const float out_l = radiated_pressure * 0.85f + p_current_[0] * 0.15f;
         const float out_r = radiated_pressure * 0.70f + p_current_[NUM_CELLS / 2] * 0.30f;
 
+        const float safe_l = std::isfinite(out_l) ? std::tanh(out_l * 0.4f) : 0.0f;
+        const float safe_r = std::isfinite(out_r) ? std::tanh(out_r * 0.4f) : 0.0f;
+
         return StereoFrame{
-            std::tanh(out_l * 0.4f),
-            std::tanh(out_r * 0.4f)
+            safe_l,
+            safe_r
         };
     }
 
@@ -151,7 +156,8 @@ public:
     }
 
     [[nodiscard]] float bell_cutoff_frequency() const noexcept {
-        return config_.speed_of_sound / (2.0f * std::numbers::pi_v<float> * config_.curvature_a);
+        const float a = (std::isfinite(config_.curvature_a) && config_.curvature_a > 1e-4f) ? config_.curvature_a : 0.01f;
+        return config_.speed_of_sound / (2.0f * std::numbers::pi_v<float> * a);
     }
 
 private:

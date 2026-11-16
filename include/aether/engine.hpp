@@ -428,6 +428,7 @@ public:
 
             // Monotonic soft-clipping saturation (never inverts phase/sign for loud inputs)
             auto soft_clip = [](Sample x) noexcept -> Sample {
+                if (!std::isfinite(x)) return 0.0f;
                 if (x <= -1.0f) return -1.0f;
                 if (x >= 1.0f) return 1.0f;
                 return x * (1.5f - 0.5f * x * x);

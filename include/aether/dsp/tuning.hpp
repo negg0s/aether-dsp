@@ -150,8 +150,9 @@ public:
      * @brief Get exact frequency for a given degree index and reference frequency.
      */
     [[nodiscard]] float get_frequency(int degree, float root_freq = 220.0f) const noexcept {
+        const float root = (std::isfinite(root_freq) && root_freq > 0.0f) ? root_freq : 220.0f;
         const int num_degrees = static_cast<int>(ratios_.size());
-        if (num_degrees == 0) return root_freq;
+        if (num_degrees == 0) return root;
 
         int octave = degree / num_degrees;
         int index = degree % num_degrees;
@@ -163,8 +164,8 @@ public:
 
         octave = std::clamp(octave, -10, 10);
         const double ratio = ratios_[index] * std::pow(period_ratio_, octave);
-        const float freq = static_cast<float>(root_freq * ratio);
-        return std::isfinite(freq) ? freq : root_freq;
+        const float freq = static_cast<float>(root * ratio);
+        return std::isfinite(freq) ? freq : root;
     }
 
     void load_scale(double period, std::vector<double> ratios, std::string description = "") {

@@ -46,6 +46,9 @@ public:
      * @param damping Microscopic damping factor
      */
     void configure(float nonlinearity = 1.8f, float coupling = 340.0f, float damping = 0.0004f) noexcept {
+        if (!std::isfinite(nonlinearity)) nonlinearity = 1.8f;
+        if (!std::isfinite(coupling)) coupling = 340.0f;
+        if (!std::isfinite(damping)) damping = 0.0004f;
         b_ = std::clamp(nonlinearity, 0.2f, 4.0f);
         a_ = std::clamp(coupling, 50.0f, 1200.0f);
         damping_ = std::clamp(damping, 0.00005f, 0.01f);
@@ -58,8 +61,13 @@ public:
      * @param width Spatial pulse width
      */
     void strike(float position = 0.25f, float velocity = 1.0f, float width = 0.05f) noexcept {
+        if (!std::isfinite(position)) position = 0.25f;
+        if (!std::isfinite(velocity)) velocity = 0.0f;
+        if (!std::isfinite(width) || width <= 0.0f) width = 0.05f;
+
         const float center = std::clamp(position, 0.05f, 0.95f) * static_cast<float>(LATTICE_SIZE);
-        const float inv_w2 = 1.0f / (2.0f * width * width * static_cast<float>(LATTICE_SIZE * LATTICE_SIZE));
+        const float w = std::clamp(width, 0.001f, 1.0f);
+        const float inv_w2 = 1.0f / (2.0f * w * w * static_cast<float>(LATTICE_SIZE * LATTICE_SIZE));
 
         for (size_t i = 0; i < LATTICE_SIZE; ++i) {
             const float dx = static_cast<float>(i) - center;
@@ -73,14 +81,18 @@ public:
      * @param amplitude Soliton wavenumber parameter \kappa
      */
     void inject_soliton(float center = 0.2f, float amplitude = 1.2f) noexcept {
+        if (!std::isfinite(center)) center = 0.2f;
+        if (!std::isfinite(amplitude)) amplitude = 1.2f;
+
         const float x0 = center * static_cast<float>(LATTICE_SIZE);
         const float kappa = std::clamp(amplitude, 0.2f, 2.5f);
+        const float b_val = (b_ > 1e-5f) ? b_ : 1.0f;
 
         for (size_t i = 0; i < LATTICE_SIZE; ++i) {
             const float x = static_cast<float>(i) - x0;
             // Toda exact soliton compression: r_n = (1/b) * ln[ 1 + sinh^2(kappa) * sech^2(kappa * n) ]
             const float sech_val = 1.0f / std::cosh(kappa * x * 0.4f);
-            const float r = (1.0f / b_) * std::log(1.0f + std::sinh(kappa) * std::sinh(kappa) * sech_val * sech_val);
+            const float r = (1.0f / b_val) * std::log(1.0f + std::sinh(kappa) * std::sinh(kappa) * sech_val * sech_val);
             q_[i] = -r;
             p_[i] = -std::sinh(kappa) * sech_val * 0.8f;
         }
@@ -128,7 +140,9 @@ public:
         const float strain_l = (q_[PICKUP_L + 1] - q_[PICKUP_L]) * 1.8f;
         const float strain_r = (q_[PICKUP_R + 1] - q_[PICKUP_R]) * 1.8f;
 
-        return {std::clamp(strain_l, -1.0f, 1.0f), std::clamp(strain_r, -1.0f, 1.0f)};
+        const float out_l = std::isfinite(strain_l) ? std::clamp(strain_l, -1.0f, 1.0f) : 0.0f;
+        const float out_r = std::isfinite(strain_r) ? std::clamp(strain_r, -1.0f, 1.0f) : 0.0f;
+        return {out_l, out_r};
     }
 
     void process_block(std::span<StereoFrame> output) noexcept {

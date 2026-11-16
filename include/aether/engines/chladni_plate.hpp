@@ -44,7 +44,16 @@ public:
      * @param sample_rate Audio sample rate
      */
     void configure(float fundamental_freq, float stiffness = 1.0f, float sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE)) noexcept {
+        if (!std::isfinite(sample_rate) || sample_rate <= 0.0f) {
+            sample_rate = static_cast<float>(DEFAULT_SAMPLE_RATE);
+        }
         sample_rate_ = std::clamp(sample_rate, 1000.0f, 384000.0f);
+        if (!std::isfinite(fundamental_freq) || fundamental_freq <= 0.0f) {
+            fundamental_freq = 440.0f;
+        }
+        if (!std::isfinite(stiffness) || stiffness <= 0.0f) {
+            stiffness = 1.0f;
+        }
         init_modes(fundamental_freq, stiffness);
     }
 
@@ -62,8 +71,11 @@ public:
      * @brief Excite plate at normalized coordinates (x, y) in [-1, 1].
      */
     void strike(Vec2 strike_coord, float velocity = 0.9f) noexcept {
-        const float x = std::clamp(strike_coord.x, -0.99f, 0.99f);
-        const float y = std::clamp(strike_coord.y, -0.99f, 0.99f);
+        const float raw_x = std::isfinite(strike_coord.x) ? strike_coord.x : 0.0f;
+        const float raw_y = std::isfinite(strike_coord.y) ? strike_coord.y : 0.0f;
+        const float x = std::clamp(raw_x, -0.99f, 0.99f);
+        const float y = std::clamp(raw_y, -0.99f, 0.99f);
+        const float vel = std::isfinite(velocity) ? velocity : 0.0f;
 
         for (auto& mode : modes_) {
             // Chladni modal shape: cos(m*pi*x)*cos(n*pi*y) - cos(n*pi*x)*cos(m*pi*y)
@@ -74,7 +86,7 @@ public:
 
             const float shape = std::cos(mx) * std::cos(my) - std::cos(nx) * std::cos(ny);
             mode.spatial_coupling = shape;
-            mode.amplitude = velocity * std::abs(shape) / (1.0f + 0.2f * (mode.m + mode.n));
+            mode.amplitude = vel * std::abs(shape) / (1.0f + 0.2f * (mode.m + mode.n));
         }
     }
 
@@ -82,8 +94,10 @@ public:
      * @brief Evaluate modal field displacement at point (x, y) at current time.
      */
     [[nodiscard]] float evaluate_field(Vec2 coord) const noexcept {
-        const float x = std::clamp(coord.x, -0.99f, 0.99f);
-        const float y = std::clamp(coord.y, -0.99f, 0.99f);
+        const float raw_x = std::isfinite(coord.x) ? coord.x : 0.0f;
+        const float raw_y = std::isfinite(coord.y) ? coord.y : 0.0f;
+        const float x = std::clamp(raw_x, -0.99f, 0.99f);
+        const float y = std::clamp(raw_y, -0.99f, 0.99f);
         float total = 0.0f;
 
         for (const auto& mode : modes_) {
@@ -97,7 +111,7 @@ public:
             const float shape = std::cos(mx) * std::cos(my) - std::cos(nx) * std::cos(ny);
             total += shape * mode.amplitude * std::cos(mode.phase);
         }
-        return total;
+        return std::isfinite(total) ? total : 0.0f;
     }
 
     /**
@@ -107,8 +121,13 @@ public:
         Sample left = 0.0f;
         Sample right = 0.0f;
 
-        const float inv_sr = 1.0f / sample_rate_;
+        const float inv_sr = 1.0f / (sample_rate_ > 0.0f ? sample_rate_ : static_cast<float>(DEFAULT_SAMPLE_RATE));
         const float two_pi = static_cast<float>(constants::TWO_PI);
+
+        const float pl_x = std::clamp(std::isfinite(pickup_l.x) ? pickup_l.x : -0.55f, -0.99f, 0.99f);
+        const float pl_y = std::clamp(std::isfinite(pickup_l.y) ? pickup_l.y : 0.35f, -0.99f, 0.99f);
+        const float pr_x = std::clamp(std::isfinite(pickup_r.x) ? pickup_r.x : 0.45f, -0.99f, 0.99f);
+        const float pr_y = std::clamp(std::isfinite(pickup_r.y) ? pickup_r.y : -0.40f, -0.99f, 0.99f);
 
         for (auto& mode : modes_) {
             if (mode.amplitude < 1e-6f) continue;
@@ -116,16 +135,16 @@ public:
             const float osc = std::sin(mode.phase);
             const float current_sample = osc * mode.amplitude;
 
-            const float ml_x = mode.m * static_cast<float>(constants::PI) * (pickup_l.x * 0.5f + 0.5f);
-            const float ml_y = mode.n * static_cast<float>(constants::PI) * (pickup_l.y * 0.5f + 0.5f);
-            const float nl_x = mode.n * static_cast<float>(constants::PI) * (pickup_l.x * 0.5f + 0.5f);
-            const float nl_y = mode.m * static_cast<float>(constants::PI) * (pickup_l.y * 0.5f + 0.5f);
+            const float ml_x = mode.m * static_cast<float>(constants::PI) * (pl_x * 0.5f + 0.5f);
+            const float ml_y = mode.n * static_cast<float>(constants::PI) * (pl_y * 0.5f + 0.5f);
+            const float nl_x = mode.n * static_cast<float>(constants::PI) * (pl_x * 0.5f + 0.5f);
+            const float nl_y = mode.m * static_cast<float>(constants::PI) * (pl_y * 0.5f + 0.5f);
             const float shape_l = std::cos(ml_x) * std::cos(ml_y) - std::cos(nl_x) * std::cos(nl_y);
 
-            const float mr_x = mode.m * static_cast<float>(constants::PI) * (pickup_r.x * 0.5f + 0.5f);
-            const float mr_y = mode.n * static_cast<float>(constants::PI) * (pickup_r.y * 0.5f + 0.5f);
-            const float nr_x = mode.n * static_cast<float>(constants::PI) * (pickup_r.x * 0.5f + 0.5f);
-            const float nr_y = mode.m * static_cast<float>(constants::PI) * (pickup_r.y * 0.5f + 0.5f);
+            const float mr_x = mode.m * static_cast<float>(constants::PI) * (pr_x * 0.5f + 0.5f);
+            const float mr_y = mode.n * static_cast<float>(constants::PI) * (pr_y * 0.5f + 0.5f);
+            const float nr_x = mode.n * static_cast<float>(constants::PI) * (pr_x * 0.5f + 0.5f);
+            const float nr_y = mode.m * static_cast<float>(constants::PI) * (pr_y * 0.5f + 0.5f);
             const float shape_r = std::cos(mr_x) * std::cos(mr_y) - std::cos(nr_x) * std::cos(nr_y);
 
             left += current_sample * shape_l;
@@ -133,12 +152,14 @@ public:
 
             mode.phase += two_pi * mode.frequency * inv_sr;
             if (mode.phase > two_pi) {
-                mode.phase -= two_pi;
+                mode.phase = std::fmod(mode.phase, two_pi);
             }
             mode.amplitude *= (1.0f - mode.decay_rate);
         }
 
-        return {left * 0.35f, right * 0.35f};
+        const float out_l = std::isfinite(left) ? std::clamp(left * 0.35f, -1.0f, 1.0f) : 0.0f;
+        const float out_r = std::isfinite(right) ? std::clamp(right * 0.35f, -1.0f, 1.0f) : 0.0f;
+        return {out_l, out_r};
     }
 
     [[nodiscard]] const std::array<PlateMode, MAX_MODES>& modes() const noexcept {
