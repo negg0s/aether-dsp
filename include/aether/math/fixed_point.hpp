@@ -49,6 +49,8 @@ public:
         const int32_t prod = (static_cast<int32_t>(raw) * static_cast<int32_t>(other.raw)) >> 15;
         return FixedQ15(static_cast<int16_t>(std::clamp<int32_t>(prod, -32768, 32767)));
     }
+
+    constexpr auto operator<=>(const FixedQ15&) const noexcept = default;
 };
 
 /**
@@ -71,6 +73,10 @@ public:
         return static_cast<float>(raw) / 134217728.0f;
     }
 
+    constexpr FixedQ27 operator-() const noexcept {
+        return FixedQ27(static_cast<int32_t>(raw == -2147483648LL ? 2147483647 : -raw));
+    }
+
     constexpr FixedQ27 operator+(FixedQ27 other) const noexcept {
         const int64_t sum = static_cast<int64_t>(raw) + static_cast<int64_t>(other.raw);
         return FixedQ27(static_cast<int32_t>(std::clamp<int64_t>(sum, -2147483648LL, 2147483647LL)));
@@ -85,6 +91,8 @@ public:
         const int64_t prod = (static_cast<int64_t>(raw) * static_cast<int64_t>(other.raw)) >> 27;
         return FixedQ27(static_cast<int32_t>(std::clamp<int64_t>(prod, -2147483648LL, 2147483647LL)));
     }
+
+    constexpr auto operator<=>(const FixedQ27&) const noexcept = default;
 };
 
 } // namespace aether::math
