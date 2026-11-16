@@ -40,7 +40,7 @@ public:
 
         [[nodiscard]] MobiusTransform inverse() const noexcept {
             const double det = determinant();
-            if (!std::isfinite(det) || std::abs(det) < 1e-12) {
+            if (!std::isfinite(det) || std::abs(det) < 1e-12 || det == 0.0) {
                 return MobiusTransform{1.0, 0.0, 0.0, 1.0};
             }
             const double inv_det = 1.0 / det;

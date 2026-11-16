@@ -4909,6 +4909,24 @@ void test_dsp_edge_case_resilience() {
         float out3 = bq.process(qnan);
         assert(std::isfinite(out3));
         assert(out3 == 0.0f);
+
+        // Nyquist boundary
+        bq.configure(aether::dsp::FilterType::Lowpass, 24000.0f, 0.707f, 48000.0f);
+        float out_nyq = bq.process(1.0f);
+        assert(std::isfinite(out_nyq));
+
+        // Beyond Nyquist limit
+        bq.configure(aether::dsp::FilterType::Lowpass, 96000.0f, 0.707f, 48000.0f);
+        float out_above = bq.process(1.0f);
+        assert(std::isfinite(out_above));
+
+        // Subnormal / denormal flushing test
+        bq.configure(aether::dsp::FilterType::Lowpass, 1000.0f, 0.707f, 48000.0f);
+        bq.reset();
+        float subnormal = 1e-39f;
+        float out_sub = bq.process(subnormal);
+        assert(std::isfinite(out_sub));
+        assert(std::abs(out_sub) == 0.0f || std::abs(out_sub) >= 1e-15f);
     }
 
     // 2. ADSR Envelope zero / negative rates

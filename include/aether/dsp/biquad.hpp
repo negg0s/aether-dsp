@@ -143,7 +143,9 @@ public:
         }
         if (std::abs(s1_) < 1e-15f) s1_ = 0.0f;
         if (std::abs(s2_) < 1e-15f) s2_ = 0.0f;
-        return out;
+        Sample result = out;
+        if (std::abs(result) < 1e-15f) result = 0.0f;
+        return result;
     }
 
 private:
