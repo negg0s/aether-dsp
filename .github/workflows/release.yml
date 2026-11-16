@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows Release (MSVC)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Ninja
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          version: 1.11.1
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Targets
+        run: |
+          cmake --build build --config Release
+
+      - name: Package Release
+        shell: pwsh
+        run: |
+          cmake --install build --prefix stage
+          Copy-Item LICENSE stage/
+          Copy-Item README.md stage/
+          Compress-Archive -Path stage/* -DestinationPath aether-dsp-windows-x64.zip
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aether-dsp-windows-x64
+          path: aether-dsp-windows-x64.zip
+
+  build-linux:
+    name: Build Linux Release (Clang)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Ninja
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          version: 1.11.1
+
+      - name: Set up Clang & GCC Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang g++-13 zip
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Targets
+        run: |
+          cmake --build build --config Release
+
+      - name: Package Release
+        run: |
+          cmake --install build --prefix stage
+          cp LICENSE stage/
+          cp README.md stage/
+          cd stage && zip -r ../aether-dsp-linux-x64.zip . && cd ..
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aether-dsp-linux-x64
+          path: aether-dsp-linux-x64.zip
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: release-assets
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd release-assets
+          sha256sum *.zip > ../checksums-sha256.txt
+          mv ../checksums-sha256.txt ./checksums-sha256.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
