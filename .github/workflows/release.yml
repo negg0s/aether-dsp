@@ -41,7 +41,7 @@ jobs:
           Compress-Archive -Path stage/* -DestinationPath aether-dsp-windows-x64.zip
 
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aether-dsp-windows-x64
           path: aether-dsp-windows-x64.zip
@@ -81,7 +81,7 @@ jobs:
           cd stage && zip -r ../aether-dsp-linux-x64.zip . && cd ..
 
       - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aether-dsp-linux-x64
           path: aether-dsp-linux-x64.zip
